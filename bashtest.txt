@@ -1,0 +1,7 @@
+while [ n<1 ]
+do 
+	n = n+1
+	echo n
+	
+done
+

@@ -1,0 +1,26 @@
+ /opt/intel/mkl 
+ 
+ 
+ Old np.show_config():
+ 
+ blas_mkl_info:
+     libraries = ['mkl_rt', 'pthread']
+     library_dirs = ['/home/frederik_nathan/anaconda3/lib']
+     define_macros = [('SCIPY_MKL_H', None), ('HAVE_CBLAS', None)]
+     include_dirs = ['/home/frederik_nathan/anaconda3/include']
+ blas_opt_info:
+     libraries = ['mkl_rt', 'pthread']
+     library_dirs = ['/home/frederik_nathan/anaconda3/lib']
+     define_macros = [('SCIPY_MKL_H', None), ('HAVE_CBLAS', None)]
+     include_dirs = ['/home/frederik_nathan/anaconda3/include']
+ lapack_mkl_info:
+     libraries = ['mkl_rt', 'pthread']
+     library_dirs = ['/home/frederik_nathan/anaconda3/lib']
+     define_macros = [('SCIPY_MKL_H', None), ('HAVE_CBLAS', None)]
+     include_dirs = ['/home/frederik_nathan/anaconda3/include']
+ lapack_opt_info:
+     libraries = ['mkl_rt', 'pthread']
+     library_dirs = ['/home/frederik_nathan/anaconda3/lib']
+     define_macros = [('SCIPY_MKL_H', None), ('HAVE_CBLAS', None)]
+     include_dirs = ['/home/frederik_nathan/anaconda3/include']
+	 
