@@ -1,5 +1,5 @@
 #!/bin/sh
-
+# Bash script to exectue by queuing software. Is just set to run pbs_pyscript.py with some resource specifications, and with some argstring arguments detailing the run.
 
 
 #PBS -e /home/frederik_nathan/Out/${PBS_JOBID%%.*}.$PBS_JOBNAME.err

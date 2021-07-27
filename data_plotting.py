@@ -10,14 +10,13 @@ import os
 import sys
 sys.path.append("/Users/frederik/Dropbox/Academics/Active/WeylNumerics/Code")
 from scipy import *
-import basic as B
 import time as time 
 from matplotlib.pyplot import *
-from Units import *
-import kgrid as kgrid 
-from DataProcessingMasterEquation import *
 
 
+import basic as B
+from units import *
+from data_refiner import *
 
 
 def angle_plot(angle_data,nfig=1):
@@ -97,26 +96,19 @@ def power_plot(Data,P0,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=No
     plt.set_size_inches(11,8)
     colorbar()
 
-    figure(nfig+2)
-    title(f"Energy absorption (computed from current)\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
-    
-    pcolormesh(rg,zg,-P1[nphi,:,:]-P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,-P1[nphi,:,:]-P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    ylim(YLIM)
-    xlim(XLIM)
-    xlabel("$k_r$")
-    ylabel("$k_z$")
     
     
-    ax  =gca()
-    ax.set_aspect("equal")
-    plt = gcf()
-    plt.set_size_inches(11,8)    
-    colorbar()
+    # ax  =gca()
+    # ax.set_aspect("equal")
+    # plt = gcf()
+    # plt.set_size_inches(11,8)    
+    # colorbar()
       
-def energy_plot(Data,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=None):
-    ((Eeq,Ess),grid)=Data
+def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=None):
+    ((P1,P2,Rho),grid)=DataP
+    ((Eeq,Ess),grid)=DataE
     
+    Nphi = shape(Eeq)[0]
     
     rg,zg = grid
         
@@ -185,6 +177,45 @@ def energy_plot(Data,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vm
     plt.set_size_inches(11,8)    
     colorbar()
     
+    figure(nfig+1)
+    title(f"Energy absorption (computed from current)\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
+    
+    pcolormesh(rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(-rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    ylim(YLIM)
+    xlim(XLIM)
+    xlabel("$k_r$")
+    ylabel("$k_z$")
+    
+    ax  =gca()
+    ax.set_aspect("equal")
+    plt = gcf()
+    plt.set_size_inches(11,8)    
+    colorbar()
+    
+    figure(nfig+2)
+    title("Absorbed energy - disspated energy [$P_0$] \n(i.e. energy absorbed by the electrons which is not dissipated yet)",fontsize=12)
+    Diff =(-( P1+P2) -1/tau * (Ess-Eeq))/P0
+    pcolormesh(rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(-rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    
+    XLIM=(-0.25,0.25)
+    YLIM=(-0.45,0.2)
+    
+    ylim(YLIM)
+    xlim(XLIM)
+    xlabel("$k_r$")
+    ylabel("$k_z$")
+    
+    ax  =gca()
+    ax.set_aspect("equal")
+    plt = gcf()
+    plt.set_size_inches(11,8)
+    colorbar()
+      
+    ND = sum(abs(Diff))*0.001**2*(pi/(2*Nphi))
+    print(f"Norm of difference between two energy absorptions: {ND:.4}")
+      
 def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     ((P1,P2,Rho),grid)=Data
     
@@ -216,7 +247,7 @@ def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     # colorbar()
 def data_point_plot(klist_0,TDS,phi0,dphi=0.1,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),nfig=8):
     # global kr
-    cstrlist=[".k",".g"]
+    cstrlist=[".k",".r"]
     legendlist=["Time-domain solver","Frequency domain solver"]
     for z in [1,0]:
         klist = klist_0[TDS==z,:]
@@ -235,7 +266,7 @@ def data_point_plot(klist_0,TDS,phi0,dphi=0.1,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2)
         kz = concatenate((kz,kz))
         kr = concatenate((kr,-kr))
         figure(nfig)
-        plot(kr,kz,cstr,markersize=1)    
+        plot(kr,kz,cstr,markersize=1.5)    
         # plot(-kr,kz,cstr,markersize=1)
         # 
         ylim(YLIM)
@@ -243,9 +274,12 @@ def data_point_plot(klist_0,TDS,phi0,dphi=0.1,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2)
         xlabel("$k_r$")
         ylabel("$k_z$")
         title(f"Data points in angle interval $\phi \in [{around(phi0,2)},{around(phi0+dphi,2)}]$",fontsize=8)
-        ax  =gca()
-        ax.set_aspect("equal")
+ 
         
+    ax  =gca()
+    ax.set_aspect("equal")
+    plt = gcf()
+    plt.set_size_inches(11,8)
     legend(legendlist)
 #    plt = gcf()
 #    plt.set_size_inches(11,8)

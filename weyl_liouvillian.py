@@ -5,6 +5,8 @@ Created on Mon Aug 17 09:10:23 2020
 
 @author: frederik
 
+Basic module for Weyl dynamics. We work in operator space.
+
 Basis vectors are:
      
 |0> = |00>
@@ -17,21 +19,28 @@ Energies and times are in units of meV.
 Length is in unit of Å.
 
 
-Good parameters:
-    
-omega1 = 1*THz
-omega2 = 0.618*omega1
-tau    = 3000*picosecond
-vF     = 1e5*meter/second
+Hamiltonian
 
-EF1 = 2e5*Volt/meter
-EF2 = 1.2e5*Volt/meter
 
-Mu =25*meV
+H(k,t) = H_0(k+A(t))
 
-NP = 25
+H_0(k) = vF * \sigma \cdot k + V0\cdot k
 
-V0 = array([0,0,0.9*vF])*1
+A(t) = A(\omega_1t,\omega_2 t)
+A(\phi_1,\phi_2) =  (A1 * sin(phi1), A2 * sin(phi2), - A1 * cos(phi1) - A2 * cos(phi2))
+
+
+We have h(k,t) = \sum_{m,n} h_{mn}(k) e^{-i\omega_1 t - i \omega_2 t}.
+The coefficients are
+
+h_{00}(k) = H_0(k) 
+h_{10}(k) = -A1/(2j)*(Sx +V0_x * I) - A1/2 * (SZ + V0_z * I) 
+h_{01}(k) = -A2/(2j)*(Sy +V0_y * I) - A2/2 * (SZ + V0_z * I) 
+
+while h_{mn}(k) = 0 for all other non-negative m,n.
+For negative m and/or n, h_{mn} can be found using
+
+h_{m,n}(k) = h_{-m,-n}^\dagger(k)
 
 
 v1: allowing for NP1 and NP2 to be different
@@ -45,20 +54,18 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = str(NUM_THREADS)
 os.environ["NUMEXPR_NUM_THREADS"]    = str(NUM_THREADS)
 os.environ["MKL_NUM_THREADS"]        = str(NUM_THREADS)
 os.environ["OPENBLAS_NUM_THREADS"]   = str(NUM_THREADS)
-#from scipy import *
+
 from scipy.linalg import * 
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy import * 
-#from matplotlib.pyplot import *
 from numpy.fft import *
 import vectorization as ve
 import numpy.random as npr
 import scipy.optimize as optimize
-import basic as B
-from Units import *
-import recursive_greens_function_v1 as rgf
 
+import basic as B
+from units import *
 
 # =============================================================================
 # Conversion between vector spaces
@@ -145,16 +152,14 @@ def get_h(k):
         H0 = I2 * (k@V0)
         return H0+H1
 
-def get_hc(k):
-    """ 
-    get commutator with h(k) in one-particle subspace
+def get_h_vec(k):
+    """
+    return SO(3) angular velocity vector corresponding to h(k)
     """
     
-    h = get_h(k)
+    return vF*k*2
     
-    return ve.lm(h)-ve.rm(h)
-
-
+    
 def get_E1(k):
     """
     return energies of one-particle states
@@ -174,20 +179,49 @@ def get_E1(k):
     
     return array([Em,Ep]).T
     
-
+def get_h_fourier_component(m,n,k):    
+    
+    h10 = -1/(2j)*A1*(vF*SX+V0[0]*I2)  -  (1/2)*A1*(vF*SZ+V0[2]*I2)
+    
+    h01 = -1/(2j)*A2*(vF*SY+V0[1]*I2)  -  (1/2)*A2*(vF*SZ+V0[2]*I2)
+#    g
+    h00 = get_h(k.reshape((1,3))).reshape((2,2))
+    if m==1 and n==0:
+        return h10
+    elif m==-1 and n==0:
+        return h10.conj().T 
+    
+    elif m==0 and n==1:
+        return h01
+    
+    elif m==0 and n==-1:
+        return h01.conj().T
+    
+    elif m==0 and n==0:
+        return h00
+    else:
+        return 0*h01
+    
+    
+        
 def get_h_components():
     """
     Get tunneling matrices in Fock space, corresponding to jumps in the postive n1 and n2 directions
     """
         
-    h10 = vF*(-1/(2j)*A1*SX  -  (1/2)*A1*SZ)
-    h01 = vF*(-1/(2j)*A2*SY  -  (1/2)*A2*SZ)
+#    h10 = vF*(-1/(2j)*A1*SX  -  (1/2)*A1*SZ)
+#    h01 = vF*(-1/(2j)*A2*SY  -  (1/2)*A2*SZ)
+
+    h10 = -1/(2j)*A1*(vF*SX+V0[0]*I2)  -  (1/2)*A1*(vF*SZ+V0[2]*I2)
+    h01 = -1/(2j)*A2*(vF*SY+V0[1]*I2)  -  (1/2)*A2*(vF*SZ+V0[2]*I2)
     
     H10 = bloch_to_fock(h10)
     H01 = bloch_to_fock(h01)
     
     return H10,H01
 
+def get_dhdt_fourier_component(m,n,k):
+    return -1j*(omega1*m + omega2*n)*get_h_fourier_component(m,n,k)
 
 def get_E(k,mu=0):
     """
@@ -215,8 +249,9 @@ def get_E(k,mu=0):
     
 def get_rhoeq0(h,band=0):
     """
-    get equilibrium position of single-particle density matrix. 
+    get equilibrium position of single-particle density matrix at zero temperature
     """
+    global NL,E0,I22,Det,E1,out
     NL = shape(h)[0]
     
     E0 = trace(h,axis1=1,axis2=2)
@@ -237,44 +272,66 @@ def get_rhoeq0(h,band=0):
     return out
     
 
-def get_rhoeq(k,mu=0):
+def get_rhoeq(k,mu=0,return_1p=False):#:,Rhoeq0=None):
     """
     Get Fock-space equilibrium density matrix at momenta in klist, with chemical potential mu. 
     For now, at zero temperature.
     """
-    NL = shape(k)[0]
+    global NL,E,A0,BoltzmanWeight,ParititionFunction,A00,R1,R2,R0,r1,r2
     
+    NL = shape(k)[0]
+#    print("Get rhoeq call")
+#    B.tic()
     E = get_E(k,mu=mu)
-    A0 = 1*argmin(E,axis=1)
+#    B.toc();B.tic()
+#    A0 = 1*argmin(E,axis=1)
     
     BoltzmanWeight = exp(-(E-amin(E,axis=1).reshape((NL,1)))/Temp)
     PartitionFunction = sum(BoltzmanWeight,axis=1)
     BoltzmanWeight = BoltzmanWeight/PartitionFunction.reshape((NL,1))
-    
-    A00 = argmax(BoltzmanWeight,axis=1)
-    
-    assert sum(abs(A0-A00))==0
+#    B.toc();B.tic()
+#    A00 = argmax(BoltzmanWeight,axis=1)
+#    
+#    assert sum(abs(A0-A00))==0
     
     R1 = zeros((NL,4,4),dtype=complex)
     
-
+#    B.toc();B.tic()
     
     # one-particle density matrices
     r1 = get_rhoeq0(get_h(k))
     r2 = get_rhoeq0(get_h(k),band=1)
+#    B.toc();B.tic()
     
 
     R0 = BoltzmanWeight[:,0]
     R2 = BoltzmanWeight[:,3]
     R1 = r1*BoltzmanWeight[:,1].reshape((NL,1,1))
     R1 += r2*BoltzmanWeight[:,2].reshape((NL,1,1))
-    
+#    B.toc();B.tic()
+#    print("")    
     ### Round to 13 digits to avoid overflow errors
+    if not return_1p:
+        
+        return R0,R1,R2
+    else:
+        return R1 
+
+
+def get_rhoeq_vec(k,mu=0):
+    """
+    Get Bloch_vector representation of rho_equilibrium in 1-particle sector 
+    """
     
-    return R0,R1,R2
+    r1 = get_rhoeq(k,mu=mu,return_1p=1)
+    
+    Vx = real(r1[:,1,0])
+    Vy = imag(r1[:,1,0])
+    Vz = 0.5*real(r1[:,0,0]-r1[:,1,1])
+    
+    V = array([Vx,Vy,Vz]).T
 
-
-
+    return V
 
 def bloch_to_fock(mat,fill=0):
     """ 
@@ -313,7 +370,6 @@ def get_fourier_rhoeq(k0,mu=0,Nphi=30):
     """
     
     K = get_kgrid(Nphi,k0)
-#    global R0,R1,R2,F0,F1,F2
     R0,R1,R2 = get_rhoeq(K,mu=mu)
     
     R0 = R0.reshape((Nphi,Nphi))
@@ -367,8 +423,8 @@ def get_t(NP1,NP2):
     Translation operator on photon space
     """
     IP1,IP2 = get_IP(NP1,NP2)
-    T1  = sp.csc_matrix(roll(IP1.toarray(),1,axis=0),dtype=complex)
-    T2  = sp.csc_matrix(roll(IP2.toarray(),1,axis=0),dtype=complex)
+    T1  = sp.lil_matrix(roll(IP1.toarray(),1,axis=0),dtype=complex)
+    T2  = sp.lil_matrix(roll(IP2.toarray(),1,axis=0),dtype=complex)
     
     T1[-1,0] = 0 
     T1[0,-1] = 0 
@@ -379,6 +435,8 @@ def get_t(NP1,NP2):
     T1 = sp.kron(T1,IP2)
     T2 = sp.kron(IP1,T2)
 
+    T1,T2 = [sp.csc_matrix(x) for x in (T1,T2)]
+    
     return T1,T2 
 
 def get_IF(NP1,NP2):
@@ -490,19 +548,84 @@ def get_n1n2(NP1,NP2):
  
     return N1,N2 
 
+def get_average_equlibrium_energy(k,Nphi,mu):
+    """ 
+    Compute average energy in equlibrium,
+    
+        \bar E_{eq} \equiv 1/t0 \int_0^t0 <H(t) * \rho_{eq}(t)>,
+    
+    for t0->inf
+    
+    
+     
+    returns  \bar E_ss, \bar E_eq
+    g
+    """
+    
+    kgrid = get_kgrid(Nphi,k0=k)
+    global R0eq,R1eq,R2eq    
+    R0eq,R1eq,R2eq = get_rhoeq(kgrid,mu=mu)
+    H           = get_h(kgrid)
+    
+    E0 = 0
+    E1 = trace(H@R1eq,axis1=1,axis2=2)
+    E2 = R2eq*trace(H,axis1=1,axis2=2)
+    
+    Eeq = real(mean(E0+E1+E2))
+ 
+    return Eeq
+def get_average_equlibrium_density(k,Nphi,mu):
+    """ 
+    Compute average energy in equlibrium,
+    
+        \bar E_{eq} \equiv 1/t0 \int_0^t0 <H(t) * \rho_{eq}(t)>,
+    
+    for t0->inf
+    
+    
+     
+    returns  \bar E_ss, \bar E_eq
+    g
+    """
+    
+    kgrid = get_kgrid(Nphi,k0=k)
+    global R0eq,R1eq,R2eq    
+    R0eq,R1eq,R2eq = get_rhoeq(kgrid,mu=mu)
+    H           = get_h(kgrid)
+    
+    E0 = 0
+    R1eq = 1-R0eq-R2eq
+    
+    Neq = mean(R1eq+ 2*R2eq)
+#    E2 = R2eq*trace(H,axis1=1,axis2=2)
+#    
+#    Eeq = real(mean(E0+E1+E2))
+ 
+    return Neq
+#def get_dhdt(k,t):
+#    Out = zeros((2,2))
+#    
+#    ph1 = omega1*t
+#    ph2 = omega2*t
+#    for (m,n) in [(0,0),(0,1),(1,0),(0,-1),(-1,0)]:
+#        Out+=get_dhdt_fourier_component(m,n,k)*exp(-1j*(ph1*m+ph2*n))
+#        
+#    return Out 
+
+
 
 if __name__=="__main__":
     
     omega1 = 20*THz
     omega2 = 0.61803398875*omega1
     tau    = 50*picosecond
-    vF     = 7e5*meter/second
+    vF     = 1e6*meter/second
     
     EF1 = 0.6*1.5*2e6*Volt/meter
     EF2 = 0.6*1.25*1.2e6*Volt/meter
     
-    Mu =15*meV*0
-    Temp  = 25*Kelvin;
+    Mu =191.6*meV
+    Temp  = 20*Kelvin;
     
     V0 = array([0,0,0.8*vF])*1
     [V0x,V0y,V0z] = V0
@@ -511,7 +634,13 @@ if __name__=="__main__":
     
     set_parameters(parameters)
     
-    NP1 = 3 
-    NP2 = 5
-    k = array([0.01,0,0])
-    L = get_liouvillian(k,NP1,NP2)
+#    NP1 = 3 
+#    NP2 = 5
+#    k = array([0,0,-0.17101449])
+    Eeq = []
+    for k in kz:
+        
+        Eeq.append(get_average_equlibrium_energy(k,300,Mu))
+        
+        
+    plot(kz,Eeq)

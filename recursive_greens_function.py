@@ -4,10 +4,14 @@
 Created on Wed Sep 16 10:11:53 2020
 
 @author: frederik
+
+Module for inverting weyl Liouvillian using recursive greens function.
+
+v1= allowing for solving multiple blocks with the same sweep
 """
 import os 
 
-NUM_THREADS = 1
+NUM_THREADS = 4
 
 os.environ["OMP_NUM_THREADS"]        = str(NUM_THREADS)
 os.environ["VECLIB_MAXIMUM_THREADS"] = str(NUM_THREADS)
@@ -22,8 +26,7 @@ import scipy.sparse.linalg as spla
 import time as time 
 import numpy.random as npr 
 import basic as B
-import test_objects as to
-import sparse_dot_mkl as sdmkl
+
 
 
 
@@ -48,7 +51,9 @@ def get_matrix_lists(H,D,block=None):
     if block==None:
         
         hlist = array([H[block_indices==n,:][:,block_indices==n] for n in range(0,NB)])
-        
+    
+    else:
+        hlist = H[block_indices==block,:][:,block_indices==block]
         
     Jp = H[block_indices==(1),:][:,block_indices==0]
     J  = H[block_indices==(0),:][:,block_indices==(1)]
@@ -123,8 +128,11 @@ class rgf_solver():
         self.psi_r = zeros((self.D),dtype=complex)
         
         self.Gamma = zeros((self.D,self.D),dtype=complex)
-        
-        
+    def get_h0(self,n):
+        return hlist[n]
+    def get_h(n):
+        return get_h0(n)
+    
     def __rightcall__(self,vector,k):
         """
         main method (see above).
@@ -132,52 +140,96 @@ class rgf_solver():
         
         I.e. compute 
         """
-        if k<0:
+        global kk,kmin,kmax
+        if type(k)==int:
+            k=[k]
+        else:
+            k=list(k)
+            
+        kk = k
+        NK = len(k)
+        kmin = min(k)
+        kmax = max(k)
+        
+        if kmin<0:
             raise ValueError("k must be zero or greater")
         
-        if k>= self.NB:
+        if kmax>= self.NB:
             raise ValueError(f"k = {k} is too large")
         def get_vector_segment(n):
             ### Returns \langle \psi_{n+1}|
             return vector[n*self.D:(n+1)*self.D]
         
         
-
+        
+        self.alphalist = zeros((NK,self.D,self.D),dtype=complex)
+        self.betalist = zeros((NK,self.D,self.D),dtype=complex)
+#        self.Gammalist = zeros((NK,self.D,self.D),dtype=complex)
+        self.psilist = zeros((NK,self.D),dtype=complex)
+        
+        self.psi_l_list = zeros((NK,self.D),dtype=complex)
+        self.psi_r_list = zeros((NK,self.D),dtype=complex)
+        self.A1 = zeros((self.D,self.D),dtype=complex)
+        self.A2 = zeros((self.D,self.D),dtype=complex)
+        self.A3 = zeros((self.D,self.D),dtype=complex)
         ### Left sweep, to obtain \alpha _{k},\langle \psi_{k}^L
-        for n in range(0,k):
+        for n in range(0,kmax):
+            self.n = n 
             ### update alpha, such that self.alpha = \alpha_{n+1} (c.f. pdf notes)
-            self.A1 = self.Jp@self.alpha
-            self.A2 = self.A1@self.J
-            self.A3 = self.hlist[n]-self.A2
+            self.A1 = self.Jp.dot(self.alpha)
+            self.A2 = (self.J.T.dot(self.A1.T)).T
+            self.A3 = array(self.get_h(n)-self.A2)
+            
+            self.A3= self.A3*array(abs(self.A3)>1e-12)
             self.alpha = inv(self.A3,check_finite=False,overwrite_a=True)
 
-                
+
             ### update psi_l, such that self.psi_l = \langle\psi^L_{n+1}| (c.f. pdf notes)
             self.psi_l = -(self.psi_l + get_vector_segment(n))@self.alpha@self.J
-
+#            raise ValueError
+            if n+1 in k:
+                ind = k.index(n+1)
+                self.alphalist[ind,::,:] = 1*self.alpha                
+                self.psi_l_list[ind,:] = 1*self.psi_l
                 
-       
         ### Right sweep, to obtain \beta _{k+2},\langle \psi_{k+2}^R
-        for n in range(self.NB-1,k,-1):
-                
+        for n in range(self.NB-1,kmin,-1):
+            self.n = n            
             ### update beta, such that self.beta = \beta{n+1} (c.f. pdf notes)
-            self.A1 = self.J@self.beta
-            self.A2 = self.A1 @ self.Jp
-            self.A3 = self.hlist[n] - self.A2
+            self.A1 = self.J.dot(self.beta)
+            self.A2 = (self.Jp.T.dot(self.A1.T)).T
+            self.A3 = array(self.get_h(n) - self.A2)
+            
+            self.A3= self.A3*array(abs(self.A3)>1e-12)
             
             self.beta = (inv(self.A3,overwrite_a=True,check_finite=False))#,overwrite_a=True,overwrite_b=True,check_finite=False))
-
             ### update psi_l, such that self.psi_l = \langle\psi^L_{n+1}| (c.f. pdf notes)
             self.psi_r = -(self.psi_r + get_vector_segment(n))@self.beta@self.Jp
 
+            if n-1 in k:
+                ind = k.index(n-1)
+                self.betalist[ind,:,:] = 1*self.beta
+                self.psi_r_list[ind,:] = 1*self.psi_r
+                
+        for nk in range(0,NK):
+                
+            k0 = k[nk]
+            ### Compute \Gamma_{k+1}.
             
-        ### Compute \Gamma_{k+1}.
-        self.Gamma = inv(self.hlist[k]-(self.Jp@self.alpha@self.J + self.J@self.beta @ self.Jp))
-        
+            
+            self.Mat = self.get_h(k0)-(self.Jp@self.alphalist[nk,:,:]@self.J + self.J@self.betalist[nk,:,:] @ self.Jp)
+            self.Mat =  self.Mat.T
+            self.Psi = self.psi_l_list[nk,:] + self.psi_r_list[nk,:] + get_vector_segment(k0)
+            
+            
+#            self.Gamma = inv(self.hlist[k0]-(self.Jp@self.alphalist[nk,:,:]@self.J + self.J@self.betalist[nk,:,:] @ self.Jp))
+            
         
         # glist[k] = \gamma _{k+1}
-        return (self.psi_l + self.psi_r + get_vector_segment(k))@self.Gamma
+            self.psilist[nk,:] = solve(self.Mat,self.Psi,overwrite_a=True,overwrite_b=True,check_finite=False) #(self.psi_l_list[nk,:] + self.psi_r_list[nk,:] + get_vector_segment(k0))@self.Gamma
     
+    
+        return self.psilist
     def __leftcall__(self,vector,k):
         
         vector = vector.conj()
@@ -186,12 +238,17 @@ class rgf_solver():
         self.Jp = self.J.conj().T
         self.J = Jp_old.conj().T
         
-        self.hlist = [x.conj().T for x in self.hlist]
+            
+#        self.hlist = [x.conj().T for x in self.hlist]
+        def New_get_h(n):
+            return self.get_h0(n).conj().T
         
+        self.get_h = New_get_h
         
         out = self.__rightcall__(vector,k)
         
-        self.hlist = [x.conj().T for x in self.hlist]
+        self.get_h = self.get_h0
+        
         Jp_old = 1*self.Jp
         
         self.Jp = self.J.conj().T
@@ -215,7 +272,11 @@ if __name__=="__main__":
     print("Testing module")
     for q in range(0,10):
         N= 2+npr.randint(30);D=1+npr.randint(30)
-        k=npr.randint(N)
+        N=30;D=30;
+        Nk = 1#+npr.randint(4)
+        k=[npr.randint(N) for x in range(0,Nk)]
+        k = list(set(k))
+        Nk = len(k)
     #    N=5;D=5
     #    k= 3
         H0 = to.test_hamiltonian(N,D,singular=True)
@@ -237,7 +298,7 @@ if __name__=="__main__":
         
         G = inv(H0)
         t3 = time.time()
-        Ans = (G@V)[k*D:(k+1)*D]
+        Ans = array([(G@V)[k[n]*D:(k[n]+1)*D] for n in range(0,Nk)])#.reshape((D,Nk))
         
         Dif = norm(Q-Ans)
         

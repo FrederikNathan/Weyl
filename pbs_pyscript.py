@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-sshpass -p "Lervangen6419" ssh qxn582@yukawa.int.nbi.dk "rm -r EnergyPump/Code/*"  
-
 """
 Created on Thu Sep 24 12:21:24 2020
 
 @author: frederik
+
+Python script to execute when launching a single simulation run
 """
 import sys
 from weyl_queue import *

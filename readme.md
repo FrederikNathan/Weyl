@@ -41,13 +41,13 @@ Moduele for representing weyl problem in SO(3) representation, and useful functi
 Plotting scripts are contained within data_analysis/ 
 
 ## Modules
-###DataProcessingMasterEquation.py (DP)
+###data_refiner.py (DP)
 Module for saving raw data  into single npz file. Automatically updates when loaded
 
-### Data_refinement.py
+### data_interpolation.py
 Module for interpolating raw data to grids.
 Dependencis (DP)
-### Data_plotting.py (pl)
+### data_plotting.py (pl)
 Module with useful plotting functions
 
 
@@ -76,6 +76,12 @@ Dependencies: wq
 
 ###queue_scripts/big_sweep.py
 Script for generating "big" sweep of the whole fermi surface, with dense points around weyl point. 
+
+### check_queue.py
+Check status of queue
+
+### clean_queue.py
+Reset status of "running" entries in queue to "waiting" (if the runs were terminated prematurely)
 
 ##modules 
 ###weyl_queue.py (wq)

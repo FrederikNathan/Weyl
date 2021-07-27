@@ -4,6 +4,8 @@
 Created on Tue Sep  8 14:31:50 2020
 
 @author: frederik
+
+script for adding to queues and reading from queues in weyl simulation
 """
 import os 
 
@@ -16,19 +18,18 @@ os.environ["MKL_NUM_THREADS"]        = str(NUM_THREADS)
 os.environ["OPENBLAS_NUM_THREADS"]   = str(NUM_THREADS)
 
 import socket
-
 from scipy import *
 from scipy.linalg import * 
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from numpy import * 
-
 import numpy.random as npr
 import scipy.optimize as optimize
-import basic as B
-from Units import * 
-import master_equation_multimode_v9 as MA
 import time 
+
+import basic as B
+from units import * 
+import master_equation_multimode as MA
 
 QueueDir = "../Queues/"
 
@@ -42,9 +43,7 @@ elif HN=="wakanda" or HN== "yukawa":
     HN = "yu"
 else: #HN=="cmtrack2.caltech.edu":
     HN="ca"
-#else:
-#    raise SystemError(f"Host {HN} not recognized")
-    
+
     
 def add_to_queue(parameterlist,klist,Name=None):
     
@@ -143,7 +142,7 @@ def readfromqueue(Queue,Serieslength):
 
     if len(I)==0:
         print("Queue empty. finishing")
-        Main.EXIT = True 
+        return
         
     
         
@@ -328,6 +327,9 @@ def wakanda_launch(Queue,N_parallel,Serieslength,TimeOut=3600):
     print("="*80)
     
 def caltech_launch(Queue,N_runs,Serieslength):
+    """
+    Launch a sweep on the caltech cluster with N_runs of Series-length k-points each
+    """
     Ndp = int(N_runs*Serieslength+1)
     ID_series = B.ID_gen()[:11]    
     
@@ -339,9 +341,6 @@ def caltech_launch(Queue,N_runs,Serieslength):
     Tmax_s = int(Tmax % 60+1)
     Tmax_m = int(Tmax/60 + 5)%60
     Tmax_h = int(Tmax/3600)
-    
-    #Tmax_m = Tmax_0 + 30
-    
     
     def fz(x):
         st = str(x)
@@ -356,8 +355,6 @@ def caltech_launch(Queue,N_runs,Serieslength):
     nodestr = "nodes=1:ppn=1"
     walltime_str = f"{fz(Tmax_h)}:{fz(Tmax_m)}:{fz(Tmax_s)}"
     
-#    resource_str=f"{mem_str},{nodestr},{timestr}"
-    
     outdir = "/home/frederik_nathan/out/"
         
     strlist=[]
@@ -371,28 +368,14 @@ def caltech_launch(Queue,N_runs,Serieslength):
         job_name = ID0+"_"+str(n)
         output_path = outdir+job_name+".out"
         err_path    = outdir+job_name+".err"
-#        command = get_launch_command(Queue,Serieslength,logfile,prestr)
-#        command = "python3 -c \"print(\'hej\')\""
-        
-        
-#        JOBNAME=$1
-#        WALLTIME=$2
-#        LOGFILE=$3
-#        PRESTR=$4
-#        QUEUE=$5
-#        $SERIESLENGTH=$6
+
 
         script  = "pbs_script.sh"
         argstring = f"LF={logfile},PRESTR='{prestr}',Q={Queue},SL={Serieslength}"
         qsub_str=f'qsub -N {job_name} -l walltime={Tmax_h}:{Tmax_m}:{Tmax_s} -v {argstring} {script} &'
         os.system(qsub_str)
         time.sleep(0.2*(1+npr.rand()))
-#        e=03:33:33
-#        os.system(f"./{script} {argstring}")
-#        print(qsub_str)
-#        strlist.append(qsub_str)
-        
-#    return strlist
+
 
   
 def slurm_launch(Queue,N_runs,Serieslength):

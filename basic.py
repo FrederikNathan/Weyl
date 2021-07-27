@@ -21,6 +21,10 @@ from scipy.special import factorial as factorial
 main_module=  sys.modules["__main__"]
 from builtins import print as old_print
 
+SX = array(([[0,1],[1,0]]),dtype=complex)
+SY = array(([[0,-1j],[1j,0]]),dtype=complex)
+SZ = array(([[1,0],[0,-1]]),dtype=complex)
+I2 = array(([[1,0],[0,1]]),dtype=complex)
 
 def print(x):
     old_print(x)
