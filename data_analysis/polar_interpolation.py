@@ -21,7 +21,7 @@ import data_interpolation as DR
 import data_plotting as PL
     
   
-n0=161
+n0=156
 angle=0.01
 # angle = 0
 phi_res = 12

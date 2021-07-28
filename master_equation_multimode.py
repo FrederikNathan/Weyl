@@ -24,12 +24,12 @@ v8: direct computation of <d\phi_2 H> and <d\phi_1 H>
 v9: SO(3) implementation of time-domain solver. Using rotating frame interpolator
 """
 
-NP_MAX                 = 300 # Maximum number of photons before using time domain solver
+NP_MAX                 = 30 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
-NPHI_TDS               = 200   # Nphi used to calculate steadystate with tds method
+NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
 CONVERGENCE_TRESHOLD   = 1e-6
-TMAX_IN_MODE1_PERIODS  = 10000
+TMAX_IN_MODE1_PERIODS  = 10000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
 
 import os 
 import sys 
@@ -50,7 +50,7 @@ import time_domain_solver as tds
 
 
 
-def get_rhoeq_vector(k,NP1,NP2,mu=0,Nphi=NPHI_RGF):
+def get_rhoeq_vector(k,parameters,NP1,NP2,mu=0,Nphi=NPHI_RGF):
     """
     calculate freuqency-space vector corresponding to \rho_eq(k+A(phi1,phi2)), 
     for phi1,phi2 = 0,1,..Nphi * 2*pi/Nphi
@@ -59,7 +59,8 @@ def get_rhoeq_vector(k,NP1,NP2,mu=0,Nphi=NPHI_RGF):
     
     Here the nth array gives rhoeq in the k-particle sector 
     """
-#    global VR0,VR1,VR2,R0,R1,R2
+    wl.set_parameters(parameters)
+    
     fourier_convergence = False
     while fourier_convergence == False:
 
@@ -109,7 +110,7 @@ def get_rhoeq_vector(k,NP1,NP2,mu=0,Nphi=NPHI_RGF):
         
     return VR0,VR1,VR2
 
-def rgf_solve_steadystate(k,NP1,NP2,freqlist,mu,Nphi):
+def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi):
     """
     Solve driven weyl problem in one-particle sector using frequency domain 
     solver (with the recursive greens function approach)
@@ -142,14 +143,15 @@ def rgf_solve_steadystate(k,NP1,NP2,freqlist,mu,Nphi):
                         
 
     """
-    freq1_list = list(sort(list(set([f[0] for f in freqlist]))))
+    [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp] = parameters
     
+    freq1_list = list(sort(list(set([f[0] for f in freqlist]))))
     nfreqs = len(freqlist)
     nv1,nv2 = [list(x) for x in (wl.get_nvec(NP1),wl.get_nvec(NP2))]
     block_list = array([nv1.index(f) for f in freq1_list])
     ind = array(block_list)
 
-    FR0,FR1,FR2 = get_rhoeq_vector(k,NP1,NP2,mu=mu,Nphi=Nphi)
+    FR0,FR1,FR2 = get_rhoeq_vector(k,parameters,NP1,NP2,mu=mu,Nphi=Nphi)
     relaxation_vector  = (-1/tau * FR1)
     
     ### Construct Weyl Liouvillian
@@ -199,7 +201,7 @@ def rgf_solve_steadystate(k,NP1,NP2,freqlist,mu,Nphi):
     
     return r0p,r1p,r2p,rho1
 
-def time_domain_solve_steadystate(k,freqlist,mu,Nphi,tmax):
+def time_domain_solve_steadystate(k,parameters,freqlist,mu,Nphi,tmax):
     """
     Solve driven weyl problem in one-particle sector using time domain solver.
     
@@ -230,13 +232,13 @@ def time_domain_solve_steadystate(k,freqlist,mu,Nphi,tmax):
     
     freqs = [omega1*m+omega2*n for (m,n) in freqlist]
     nfreqs = len(freqlist)
-    global Solver,r2p,r1p,r0p
-    Solver = tds.time_domain_solver(k)
+    # global Solver,r2p,r1p,r0p
+    Solver = tds.time_domain_solver(k,parameters)
 
     r1p_vec =  Solver.get_ft(freqs,tmax)
     
     ### computing r_2p and r_0p
-    FR0,FR1,FR2 = get_rhoeq_vector(k,Nphi,Nphi,mu=mu,Nphi=Nphi)
+    FR0,FR1,FR2 = get_rhoeq_vector(k,parameters,Nphi,Nphi,mu=mu,Nphi=Nphi)
     rho2= FR2.reshape((Nphi,Nphi))
     rho0 = FR0.reshape((Nphi,Nphi))
     rho1 = FR1.reshape((Nphi,Nphi,2,2))
@@ -263,7 +265,7 @@ def time_domain_solve_steadystate(k,freqlist,mu,Nphi,tmax):
         
     return r0p,r1p,r2p
         
-def get_steady_state_components(k,freqlist,mu,NP0=INITIAL_NP,convergence_treshold=1e-9,
+def get_steady_state_components(k,parameters,freqlist,NP0=INITIAL_NP,convergence_treshold=1e-9,
                      return_convergence_parameters=False,tmax = None):
     """
     Get flattened frequency vectors corresponding to steady state at momentum k 
@@ -304,7 +306,7 @@ def get_steady_state_components(k,freqlist,mu,NP0=INITIAL_NP,convergence_treshol
     When the 1-norm of the difference is less than convergence_treshold * norm(output), 
     convergence is reached
     """
-
+    [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp] = parameters
     B.tic(n=57)
     
     if tmax is None:
@@ -315,7 +317,7 @@ def get_steady_state_components(k,freqlist,mu,NP0=INITIAL_NP,convergence_treshol
     nfreqs=len(freqlist)
     ### reference output from last iteration used to determine convergence (set to zero for the first iteration)
     ReferenceRho = zeros((nfreqs,2,2),dtype=complex)
-#    global r0p,r1p,r2p,rho1
+
 
     while True:
 
@@ -326,11 +328,10 @@ def get_steady_state_components(k,freqlist,mu,NP0=INITIAL_NP,convergence_treshol
         sys.stdout.flush()
         B.tic(n=166)
         
-        ### Find indices of blocks that we are interested in 
 
         ### Find frequency components of equilbrium state
                 
-        r0p,r1p,r2p,rho1= rgf_solve_steadystate(k,NP1,NP2,freqlist,mu,NPHI_RGF)       
+        r0p,r1p,r2p,rho1= rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,NPHI_RGF)       
             
         print(f"    done. Time spent: {B.toc(n=166,disp=0):.4}s")
         sys.stdout.flush()
@@ -364,7 +365,7 @@ def get_steady_state_components(k,freqlist,mu,NP0=INITIAL_NP,convergence_treshol
                 print(f"{'-'*80}")
                 print("Reached maximum bound for NP1. Using time domain solver")
                 
-                r0p,r1p,r2p = time_domain_solve_steadystate(k,freqlist,mu,NPHI_TDS,tmax)
+                r0p,r1p,r2p = time_domain_solve_steadystate(k,parameters,freqlist,mu,NPHI_TDS,tmax)
 
                 use_tds = True
                 print("="*80)
@@ -410,7 +411,6 @@ def get_average_steadystate_energy(r0,r1,r2,freqlist,k):
         """
         
         assert freqlist == [(0,0),(0,1),(1,0)],"wrong frequency components given"
-#        global E1ss,E2ss,h00,h01,h10
         
 
         E0ss = 0
@@ -432,12 +432,49 @@ def get_average_steadystate_energy(r0,r1,r2,freqlist,k):
         Ess = E0ss+E1ss+E2ss 
         
         return Ess
-def get_density(r0,r1,r2):
-    return 2*r2+trace(r1)    
 
-def solve_weyl(k,mu,NP0=INITIAL_NP,convergence_treshold=CONVERGENCE_TRESHOLD,tmax =None):
+def solve_weyl(k,parameters,NP0=INITIAL_NP,convergence_treshold=CONVERGENCE_TRESHOLD,tmax =None):
     """
     Get average power pumped into modes 1 and 2, from modes at crystal momentum k.
+
+
+    Parameters
+    ----------
+    k : ndarray(3), float
+        k-point to probe.
+    parameters : ndarray(11), float
+        Parameters of system to probe.
+    NP0 : int, optional
+        Number of photon states to include in frequency domain solver initially. 
+        The default is INITIAL_NP.
+    convergence_treshold : float, optional
+        Treshold for determning that the frequency domain solver has converged. 
+        If the relative change of the steady state rho after increasing photon 
+        number by a factor 1.5 is smaller than convergence_treshold, the solver
+        is determined to have converged. The default is CONVERGENCE_TRESHOLD.
+    tmax : float, optional
+        averaging time in case time-domain solver is used. 
+        The default is TMAX_IN_MODE1_PERIODS.
+
+    Returns
+    -------
+    density : float
+        time-averaged density in steady state.
+    P1 : float
+        time-averaged energy transfer to (or from?) mode 1.
+    P2 : float
+        time-averaged energy transfer to (or from?) mode 2.
+    Ess : float
+        time-averaged energy in the steady state
+    Eeq : float
+        time_averaged energy in instantaneous equilibrium state.
+    use_tds : bool
+        Flags whether time-domain solver has been used. If True, time-domain
+        solver has been used
+
+    Details 
+    -------
+    The power is computed as
 
     P(k) = \lim_{t_0 \to \infty} \int_0^{t_0} <j_k (t)\cdot E_1(t)>.
     
@@ -448,46 +485,24 @@ def solve_weyl(k,mu,NP0=INITIAL_NP,convergence_treshold=CONVERGENCE_TRESHOLD,tma
     
     j_k(t) = \sum_{mn} j_{mn}(k)e^{-i(\omega_1m + \omega_2 n )t}
     """    
-    global r0,r1,r2
-    if tmax is None:
-         tmax = 1000*2*pi/omega1
 
-#    global Eav_eq,mode1_power_0,mode1_power_1,mode1_power_2,r0,r1,r2,Eav_steadystate,dh00,dh10,dh01
+    if tmax is None:
+         tmax = TMAX_IN_MODE1_PERIODS*2*pi/omega1
+
+    [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp]  =  parameters
+
     r0,r1,r2,use_tds = get_steady_state_components(
             k,
+            parameters,
             [(0,0),(0,1),(1,0)],
-            mu,
             NP0=NP0,
             convergence_treshold=convergence_treshold,
             tmax=tmax
             )
 
-       
-    [dh00,dh01,dh10] = [wl.get_dhdt_fourier_component(m,n,k) for (m,n) in [(0,0),(0,1),(1,0)]]
-
-    mode1_power_0    = 0
-    mode1_power_1    = 2*real(trace(dh10.conj().T @ r1[2]))
-    mode1_power_2    = 2*real(trace(dh10.conj())*r2[2])
+    derived_quantities = derive_quantities_from_steady_state_component(k,parameters,r0,r1,r2)
     
-    mode2_power_0    = 0
-    mode2_power_1    = 2*real(trace(dh01.conj().T @ r1[1]))
-    mode2_power_2    = 2*real(trace(dh01.conj()) * r2[1])
-        
-    mode1_power = mode1_power_0+mode1_power_1+mode1_power_2
-    mode2_power = mode2_power_0+mode2_power_1+mode2_power_2
-    
-    
-    Eav_steadystate = get_average_steadystate_energy(r0,r1,r2,[(0,0),(0,1),(1,0)],k)
-
-
-    work = mode1_power+mode2_power    
-    
-    Eav_eq          = wl.get_average_equlibrium_energy(k,NPHI_TDS,mu)
-
-    density = get_density(r0[0],r1[0],r2[0])
-    
-    
-    dissipation = 1/tau*(Eav_steadystate-Eav_eq)
+    density,P1,P2,Ess,Eeq,work,dissipation = derived_quantities
     
     if dissipation < 0:
         print("%"*80)
@@ -503,51 +518,83 @@ def solve_weyl(k,mu,NP0=INITIAL_NP,convergence_treshold=CONVERGENCE_TRESHOLD,tma
         print("%"*80)
         sys.stdout.flush()
         
-    
-    
-    return density,mode1_power,mode2_power,Eav_steadystate,Eav_eq,use_tds
+    return density,P1,P2,Ess,Eeq,work,dissipation,use_tds
 
 
-
-
-
-
-
-
-
-    
-def set_parameters(parameters):
+def derive_quantities_from_steady_state_component(k,parameters,r0,r1,r2):
     """
-    Set parameters in modules used to solve weyl"""
-    
-    wl.set_parameters(parameters)
-    tds.wl.set_parameters(parameters)
-    tds.set_parameters(parameters)
+    Derive quantities from the fourier components of the steady state at crystal
+    momentum k, with parameters specified by parameters
 
-    global omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp
+    Parameters
+    ----------
+    k : ndarray(3),float
+        k-point to be probed.
+    parameters : ndarray(11), float
+        parameters to be probed.
+    r0 : ndarray(3), float
+        Fourier coefficients (0,0),(0,1),(1,0) of steady-state in 0-particle sector
+    r1 : ndarray(3,2,2), float
+        Fourier coefficients (0,0),(0,1),(1,0) of steady-state in 1-particle sector.
+    r2 : ndarray(3), float
+        Fourier coefficients (0,0),(0,1),(1,0) of steady-state in 2-particle sector.
 
-    [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]=parameters
-    assert omega2>=omega1,"omega2 must be larger than omega1 (due to efficiency considerations)"
+    Returns
+    -------
+    density : float
+        Average density in steady state.
+    mode1_power : float
+        Average energy transfer rate to mode 1 (or the other way around?)
+    mode2_power : float
+        Average energy transfer rate to mode 2 (or the other way around?)
+    Eav_steadystate : float
+        Average energy in steady state
+    Eav_eq : float
+        Average energy in instantaneous equilibrium state
+    work : float
+        mode1_power+mode2_power. Average rate of energy transferred from the system to the modes (or the other way around?)
+    dissipation : float
+        Average rate of dissipation, 1/tau*(Eav_steadystate-Eav_eq)  .
+
+    """
+    [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp]  =  parameters
+      
+    [dh00,dh01,dh10] = [wl.get_dhdt_fourier_component(m,n,k) for (m,n) in [(0,0),(0,1),(1,0)]]
+
+    mode1_power_0    = 0
+    mode1_power_1    = 2*real(trace(dh10.conj().T @ r1[2]))
+    mode1_power_2    = 2*real(trace(dh10.conj())*r2[2])
     
-    global V0,P0,A1,A2
-    V0 = array([V0x,V0y,V0z])
-    P0 = omega1*omega2/(2*pi)
+    mode2_power_0    = 0
+    mode2_power_1    = 2*real(trace(dh01.conj().T @ r1[1]))
+    mode2_power_2    = 2*real(trace(dh01.conj()) * r2[1])
+        
+    mode1_power = mode1_power_0+mode1_power_1+mode1_power_2
+    mode2_power = mode2_power_0+mode2_power_1+mode2_power_2
     
-    ## vector field amplitude 
-    A1 = EF1/omega1
-    A2 = EF2/omega2
+    Eav_steadystate = get_average_steadystate_energy(r0,r1,r2,[(0,0),(0,1),(1,0)],k)
+    
+    work = mode1_power+mode2_power    
+    
+    Eav_eq          = wl.get_average_equlibrium_energy(k,NPHI_TDS,mu)
+
+    density = 2*r2[0]+trace(r1[1])   
+    
+    
+    dissipation = 1/tau*(Eav_steadystate-Eav_eq)       
+    
+    
+    return density,mode1_power,mode2_power,Eav_steadystate,Eav_eq,work,dissipation
+
+
+
+
+
+
+
+
 
     
-    global SX,SY,SZ,I2,sx,sy,sz,i2,ZM,Ind,I6,IP,IPP,IF,NPP,DH
-
-    
-    [SX,SY,SZ,I2] = [B.SX,B.SY,B.SZ,B.I2]
-    [sx,sy,sz,i2] = [q.flatten() for q in [SX,SY,SZ,I2]]
-    
-    ZM = zeros((4,4),dtype=complex)
-    
-    # Indices in vectorized matrix space, where \rho may be nonzero. (we restrict ourselves to this subspace)
-    Ind = array([5,6,9,10])
     
 
 
@@ -563,6 +610,10 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
     Main sweep.
     
     Compute pumping power into mode 1 and 2, along with average density, from modes at crystal momentum k. 
+    
+    P1_list: work done by system on mode 1 . (similar with P2_list)
+    
+    Output is just used for testing purposes -- saves autmoatically
     """
     
     Nk = shape(klist)[0]
@@ -577,6 +628,8 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
     Eeq_list        = zeros(Nk)
     Ess_list        = zeros(Nk)
     density_list    = zeros(Nk)
+    dissipation_list= zeros(Nk)
+    work_list       = zeros(Nk)
     convlist        = zeros((Nk,2),dtype=int)
     crlist          = zeros((Nk))
     use_tds_list    = zeros((Nk),dtype=bool)
@@ -594,17 +647,16 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
         k = klist[n]
         parameters=parameterlist[n]
         
-        set_parameters(parameters)
         
         if tmax==None:
             tmax_input = TMAX_IN_MODE1_PERIODS*2*pi/omega1 
         else:
             tmax_input = tmax
             
-        density,P1,P2,Eav_ss,Eav_eq,use_tds = solve_weyl(k,mu=Mu,NP0=NP0,convergence_treshold=convergence_treshold,tmax = tmax_input)
+        density,P1,P2,Eav_ss,Eav_eq,work,dissipation,use_tds = solve_weyl(k,parameters,NP0=NP0,convergence_treshold=convergence_treshold,tmax = tmax_input)
         gc.collect()
 
-        # P1_list: work done by system on mode 1 . (similar with P2_list)
+        #
         
         P1_list[n]=-P1
         P2_list[n]=-P2
@@ -612,11 +664,11 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
         Ess_list[n] = Eav_ss
         use_tds_list[n] = use_tds
         density_list[n]=real(density)
-        
+        dissipation_list[n] = dissipation
+        work_list[n] = work
    
 
         if B.toc(n=1,disp=False)>savetime and Save:
-            dissipation_list = -(P1list+P2list)
 
             savez(DataPath,
                   parameterlist=parameterlist[:n+1],
@@ -649,7 +701,7 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
     print("="*80)
     sys.stdout.flush()
     
-    return P1_list,P2_list,density_list,dissipation_list,Eeq_list,Ess_list
+    return P1_list,P2_list,density_list,Eeq_list,Ess_list,work_list,dissipation_list
 
 
 
@@ -670,39 +722,29 @@ if __name__=="__main__":
     # Simulation parameters
     # =========================================================================
     
-
-    omega2 = 20*THz
-    omega1 = 0.61803398875*omega2
-    tau    = 10*picosecond
-    vF     = 1e5*meter/second
-    
-    EF2 = 0.6*1.5*2e6*Volt/meter
-    EF1 = 0.6*1.25*1.2e6*Volt/meter
-    
-    T1 = 2*pi/omega1
-    
-    Mu =115*0.1
-    Temp  = 20*Kelvin*0.1;
-    
-    V0 = array([0,0,0.8*vF])
+    omega2  = 20*THz
+    omega1  = 0.61803398875*omega2
+    tau     = 10*picosecond
+    vF      = 1e5*meter/second
+    EF2     = 0.6*1.5*2e6*Volt/meter
+    EF1     = 0.6*1.25*1.2e6*Volt/meter
+    T1      = 2*pi/omega1
+    Mu      = 115*0.1
+    Temp    = 20*Kelvin*0.1;
+    V0      = array([0,0,0.8*vF])
     [V0x,V0y,V0z] = V0
     
-    ky=0;kx=0
-    kzlist = linspace(-0.5,0.3,20)
-
-    klist = array([[kx,ky,kz] for kz in kzlist])
-
     klist= array([[ 0.,  0.        , 0       ]])
-    parameters = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]]*len(klist))
-    set_parameters(parameters[0])
+    parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
 
 
-    P1_list,P2_list,density_list,dissipation_list,Eeq_list,Ess_list =main_run(
-            klist,parameters,
+
+    P1,P2,density,Eeq,Ess,work,dissipation=main_run(
+            klist,parameterlist,
             Save=False)
     
     
-    print(f"\n Dissipation: {dissipation_list[0]:.4}\n")
+
     
 
     

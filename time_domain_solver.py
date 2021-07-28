@@ -12,11 +12,11 @@ v1: speedup computing of steady states and fourier transform.
 v4: with linear interpolation in iteration to reduce correction from O(dt) to O(dt^2)
 v9: using SO(3) representation. Using rotating frame interpolator
 """
-RELATIVE_DT_MAX = 1    # Maximum dt relative to 1/|H|.
-T_RELAX         = 11 # time-interval used for relaxing to steady state, in units of tau.
+ 
+T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
-NMAT_MAX        = 100
-T_RES           = 100
+NMAT_MAX         = 100
+T_RES            = 100   # time resolution that enters. 
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
 
 import os 
@@ -54,7 +54,7 @@ class time_domain_solver():
     def __init__(self,k,parameters):
         self.k = k
         self.parameters = parameters
-        
+
         # Set parameters in weyl liouvillian module
         wl.set_parameters(parameters)
 
@@ -71,8 +71,8 @@ class time_domain_solver():
             
         # Set time integration parameters
         self.dt = self.get_dt()        
-        self.tau_factor = 1-exp(-self.dt/tau)
-        self.t_relax = T_RELAX * tau # time-interval used for relaxing to steady state
+        self.tau_factor = 1-exp(-self.dt/self.tau)
+        self.t_relax = T_RELAX * self.tau # time-interval used for relaxing to steady state
         
         # Initialize running variables
         self.ns  = 0
@@ -85,7 +85,10 @@ class time_domain_solver():
 
     def get_dt(self):
         """
-        determine time integration increment. Increment is an iarrational factor of order 1 times the smallest of T1/T_RES, T2/T_RES, tau/T_RES
+        determine time integration increment. 
+        Increment is an iarrational factor of order 1 times the smallest of 
+        
+        T1/T_RES, T2/T_RES, tau/T_RES
 
         Returns
         -------
@@ -107,7 +110,7 @@ class time_domain_solver():
     
         """
         self.t_cache = self.t.reshape((1,len(self.t))) + arange(self.N_cache+1).reshape((self.N_cache+1,1))*self.dt
-        self.k_cache =   swapaxes(wl.get_A(omega1*(self.t_cache),omega2*(self.t_cache)).T,0,1)+self.k 
+        self.k_cache =   swapaxes(wl.get_A(self.omega1*(self.t_cache),self.omega2*(self.t_cache)).T,0,1)+self.k 
         self.h_vec_cache = wl.get_h_vec(self.k_cache) 
     
         
@@ -145,12 +148,12 @@ class time_domain_solver():
             self.generate_cache()
 
         # Compute rho_1 (used as an intermediate step in computation of steady state)
-        self.rho_1   = self.rho*exp(-self.dt/tau)+0.5*(1-exp(-self.dt/tau))*(self.rhoeq1)
+        self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
         
         # Update rho
         
         self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
-        self.rho   += 0.5*(1-exp(-self.dt/tau))*self.rhoeq2
+        self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
 
 
     def set_steady_state(self,t0):
@@ -221,7 +224,7 @@ class time_domain_solver():
         """
         nml= arange(1,NMAT_MAX)
         
-        self.cost = T_RELAX*tau * sqrt(100**2+nml**2) + tmax/nml* sqrt(100**2+nml**2)
+        self.cost = T_RELAX*self.tau * sqrt(100**2+nml**2) + tmax/nml* sqrt(100**2+nml**2)
         
         a0 = argmin(self.cost)
         NM = nml[a0]
