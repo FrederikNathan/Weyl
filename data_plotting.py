@@ -158,7 +158,7 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     # plt = gcf()
     # plt.set_size_inches(11,8)
     # colorbar()
-
+    global Diss
     figure(nfig)
     title(f"Dissipation (computed by average energy difference to equilibrium)\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
@@ -178,7 +178,7 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     colorbar()
     
     figure(nfig+1)
-    title(f"Energy absorption (computed from current)\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
+    title(f"Work done by driving on system\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
     pcolormesh(rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
     pcolormesh(-rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
@@ -194,7 +194,7 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     colorbar()
     
     figure(nfig+2)
-    title("Absorbed energy - disspated energy [$P_0$] \n(i.e. energy absorbed by the electrons which is not dissipated yet)",fontsize=12)
+    title("Absorbed energy (work - disspated energy) [$P_0$] \n(i.e. energy absorbed by the electrons which is not dissipated yet)",fontsize=12)
     Diff =(-( P1+P2) -1/tau * (Ess-Eeq))/P0
     pcolormesh(rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
     pcolormesh(-rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
@@ -245,7 +245,7 @@ def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     plt.set_size_inches(11,8)
     
     # colorbar()
-def data_point_plot(klist_0,TDS,phi0,dphi=0.1,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),nfig=8):
+def data_point_plot(klist_0,TDS,phi0,dphi=pi/(2*6),XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),nfig=8):
     # global kr
     cstrlist=[".k",".r"]
     legendlist=["Time-domain solver","Frequency domain solver"]
@@ -256,8 +256,8 @@ def data_point_plot(klist_0,TDS,phi0,dphi=0.1,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2)
         r        = sqrt(kx**2+ky**2)
         phi      = arcsin(ky/(1e-14+r))+1e-9
     
-        phimin = phi0
-        phimax = phi0+dphi
+        phimin = phi0-dphi/2
+        phimax = phi0+dphi/2
         
         Ind = where((phi<phimax)*(phi>=phimin))[0]
          

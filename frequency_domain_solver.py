@@ -24,7 +24,7 @@ v8: direct computation of <d\phi_2 H> and <d\phi_1 H>
 v9: SO(3) implementation of time-domain solver. Using rotating frame interpolator
 """
 
-NP_MAX                 = 300 # Maximum number of photons before using time domain solver
+NP_MAX                 = 3 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
@@ -32,7 +32,6 @@ CONVERGENCE_TRESHOLD   = 1e-6
 TMAX_IN_MODE1_PERIODS  = 10000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
 TMAX_IN_MODE1_PERIODS  = 100 # override for testing
 SAVE_STEADYSTATE       = True
-
 print("WARNING: saving evolution data ")
 import os 
 import sys 
@@ -43,9 +42,9 @@ from scipy import *
 from numpy.fft import *
 import numpy.random as npr
 import scipy.optimize as optimize
+import basic as B
 import gc
 
-import basic as B
 from units import *
 import weyl_liouvillian as wl
 import recursive_greens_function as rgf
@@ -148,32 +147,9 @@ def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi,evolution_file=N
     """
     [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp] = parameters
     
-    global freq1_list,rho1
-    assert (evolution_file is None) or type(evolution_file)==str,"save_evolution must be None or str"
-    if type(evolution_file)==str:
-        
-        save_evolution = True
-        evolution_file = evolution_file
-    else:
-        save_evolution = False
-        evolution_file = ""
     
-    if not save_evolution:    
-        freq1_list = list(sort(list(set([f[0] for f in freqlist]))))
-        
-    else:
-        freq1_list = list(wl.get_nvec(NP1))
-       
-        # find indices in freq1list which we want for output
-        power_freqs = list(sort(list(set([f[0] for f in freqlist]))))
-        
-        ind = []
-        for f in power_freqs:
-            z = where(freq1_list==f)[0]
-            ind.append(z)
-            
-        
-            
+    
+    freq1_list = list(sort(list(set([f[0] for f in freqlist]))))
     nfreqs = len(freqlist)
     nv1,nv2 = [list(x) for x in (wl.get_nvec(NP1),wl.get_nvec(NP2))]
     block_list = array([nv1.index(f) for f in freq1_list])
@@ -194,23 +170,10 @@ def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi,evolution_file=N
         return h0 + omega1*1j*nv1[n]*rgf_eye
     
     
-    S = rgf.rgf_solver([0]*NP1,J,Jp)
+    S = rgf.rgf_solver([0]*NP1,J,Jp,evolution_file=evolution_file)
     S.get_h0 = get_h
 
-    rho1_full = S(relaxation_vector,block_list,mode="l").reshape((len(freq1_list),NP2,2,2)) 
-    
-    if save_evolution:
-        datadir = "../Frequency_domain_solutions/"
-        filename = datadir + evolution_file
-        
-        savez(filename,k=k,parameters = parameters,freq_1 =nv1,freq_2=nv2,fourier_coefficients = rho1_full)
-        
-        rho1 = rho1_full[ind,:]
-    else:
-        rho1 = rho1_full
-        
-    
-    
+    rho1 = S(relaxation_vector,block_list,mode="l").reshape((len(freq1_list),NP2,2,2)) 
     rho2= FR2.reshape((NP1,NP2))
     
     
@@ -270,7 +233,6 @@ def time_domain_solve_steadystate(k,parameters,freqlist,mu,Nphi,tmax,evolution_f
                         at frequency freqlist[k]     
         
     """
-    omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
     
     freqs = [omega1*m+omega2*n for (m,n) in freqlist]
     nfreqs = len(freqlist)
@@ -697,7 +659,6 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
         k = klist[n]
         parameters=parameterlist[n]
         
-        omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
         
         if tmax==None:
             tmax_input = TMAX_IN_MODE1_PERIODS*2*pi/omega1 
@@ -779,32 +740,21 @@ if __name__=="__main__":
     # =========================================================================
     
     
-    fds_dir = "../Frequency_domain_solutions/"
+    omega2  = 20*THz
+    omega1  = 0.61803398875*omega2
+    tau     = 0.010*picosecond
+    vF      = 1e5*meter/second
+    EF2     = 0.6*1.5*2e6*Volt/meter
+    EF1     = 0.6*1.25*1.2e6*Volt/meter
+    T1      = 2*pi/omega1
+    Mu      = 115*0.1
+    Temp    = 20*Kelvin*0.1;
+    V0      = array([0,0,0.8*vF])
+    [V0x,V0y,V0z] = V0
     
-    filename_fds = "_1_210729_1114-06.037_0.npz"
-    fds_data = load(fds_dir+filename_fds)
+    klist= array([[ 0.,  0.        , 0       ]])
+    parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
 
-    
-    parameters  = fds_data["parameters"]
-    k           = fds_data["k"]
-    # omega2  = 20*THz
-    # omega1  = 0.61803398875*omega2
-    # tau     = 0.1*picosecond
-    # vF      = 1e6*meter/second
-    # EF2     = 0.6*1.5*2e6*Volt/meter 
-    # EF1     = 0.6*1.25*1.2e6*Volt/meter  
-
-    
-    # Mu      = 115*0.1
-    # Temp    = 20*Kelvin*0.1;
-    # V0      = array([0,0,0.0*vF])
-    # [V0x,V0y,V0z] = V0
-    
-    # klist= array([[ 0.08,  0.        , 0.      ]])
-    # parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
-    
-    parameterlist = 1*array([parameters])
-    klist= array([k])
 
 
     P1,P2,density,Eeq,Ess,work,dissipation=main_run(
@@ -820,24 +770,21 @@ if __name__=="__main__":
     # # Simulation parameters
     # # =========================================================================
     
-#     parameters = array([2.98881237e+00, 4.83600000e+00, 3.30851944e+03, 2.41800000e+03,
-#         0.00000000e+00, 0.00000000e+00, 1.93440000e+03, 9.00000000e-02,
-#         1.80000000e-01, 1.15000000e+02, 1.72400000e+00])
+    # parameters = array([2.98881237e+00, 4.83600000e+00, 3.30851944e+03, 2.41800000e+03,
+    #    0.00000000e+00, 0.00000000e+00, 1.93440000e+03, 9.00000000e-02,
+    #    1.80000000e-01, 1.15000000e+02, 1.72400000e+00])
 
-# # array([2.98881237e+00, 4.83600000e+00, 4.13564930e-02, 2.41800000e+02,
-# #         0.00000000e+00, 0.00000000e+00, 1.93440000e+02, 9.00000000e-02,
-# #         1.80000000e-01, 1.15000000e+01, 1.72400000e-01])
-#     [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp]  =  parameters
+    # [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp]  =  parameters
     
-#     klist= array([[ 0.1,  0.        , 0       ]])
-#     parameterlist = 1*array([parameters])
+    # klist= array([[ 0.04,  0.        , 0       ]])
+    # parameterlist = 1*array([parameters])
 
 
 
-#     P1,P2,density,Eeq,Ess,work,dissipation=main_run(
-#             klist,parameterlist,
-#             display_progress=1000,
-#             Save=False)
+    # P1,P2,density,Eeq,Ess,work,dissipation=main_run(
+    #         klist,parameterlist,
+    #         display_progress=1000,
+    #         Save=False)
     
     
     

@@ -38,5 +38,5 @@ PL.angle_plot(angle_data)
 PL.power_plot(data_2d,P0,angle=angle,nfig=20,vmax=1.)
 PL.energy_plot(data_2d,e_d2d,P0,tau,angle=angle,nfig=75,vmax=.1)
 PL.density_plot(data_2d,angle=angle)
-PL.data_point_plot(klist,TDS,angle-1e-7,dphi=pi/(2*phi_res),nfig=11)
+PL.data_point_plot(klist,TDS,angle,dphi=pi/(2*phi_res),nfig=50)
 

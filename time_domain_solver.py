@@ -16,7 +16,7 @@ v9: using SO(3) representation. Using rotating frame interpolator
 T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 100
-T_RES            = 100   # time resolution that enters. 
+T_RES            = 1000   # time resolution that enters. 
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
 
 import os 
@@ -50,11 +50,22 @@ class time_domain_solver():
     Core time-domain solver object
     Takes as input a k-point and parameter set
     
+    if save_evolution is specified )As string), evolution is saved at filename specified by the string. 
     """
-    def __init__(self,k,parameters):
+    def __init__(self,k,parameters,evolution_file=None):
         self.k = k
         self.parameters = parameters
-
+        
+        assert (evolution_file is None) or type(evolution_file)==str,"save_evolution must be None or str"
+        if type(evolution_file)==str:
+            
+            self.save_evolution = True
+            self.evolution_file = evolution_file
+        else:
+            self.save_evolution = False
+            self.evolution_file = ""
+        
+        print(evolution_file)
         # Set parameters in weyl liouvillian module
         wl.set_parameters(parameters)
 
@@ -276,11 +287,11 @@ class time_domain_solver():
         self.t0_array = self.N_T1*self.T1 * (arange(self.NM)+1000*npr.rand(self.NM))
   
         # initialize rho in steady state at times in t0_array
-        # print("WARNING: bypassed steady state for testing purposes. Uncomment code before using")
         self.set_steady_state(self.t0_array)
         # """
         # Begin bypass code
         # """
+        # print("WARNING: bypassed steady state for testing purposes. Uncomment code before using")
         # self.rho = array([[ 0.04844703,  0.00797926,  0.18033738],
         # [ 0.04783463, -0.1675469 ,  0.06433975],
         # [ 0.0482473 , -0.17545244, -0.03456465],
@@ -325,12 +336,24 @@ class time_domain_solver():
         
         print(f"Computing Fourier transform. Number of iterations : {self.NS_ft}");B.tic(n=11)
        
+        
+        self.Nsteps = int(self.T1*self.N_T1/self.dt + 100)
+        
+        
+        if self.save_evolution:
+            self.evolution_record = zeros((self.Nsteps,self.NM,3),dtype=float)
+            self.sampling_times            = zeros((self.Nsteps,self.NM),dtype=float)
         # Iterate until time exceeds T1*N_T1
         while self.t[0]-self.t0_array[0] < self.T1*self.N_T1:
             
+            if self.save_evolution:
+                self.evolution_record[self.ns_ft,:,:]=self.rho
+                self.sampling_times[self.ns_ft,:] = self.t
+                
             # Evolve
             self.evolve()
-           
+            
+            
             # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             DT = self.t[0]-self.t0_array[0]
             self.Out += exp(1j*freqlist*DT)*self.rho
@@ -345,6 +368,14 @@ class time_domain_solver():
         print(f"done. Time spent: {B.toc(n=11,disp=0):.4}s")
         print("")
         
+        
+        if self.save_evolution:
+            self.evolution_record = self.evolution_record[:self.ns_ft]
+            self.sampling_times   = self.sampling_times[:self.ns_ft]
+            
+            self.save_evolution_record()
+            
+            
         # Modify initial phases of fourier transform 
         self.Out = self.Out * exp(1j*freqlist*self.t0_array.reshape((1,len(self.t0_array),1)))
         
@@ -353,11 +384,17 @@ class time_domain_solver():
         
         return self.fourier_transform
 
-  
+    def save_evolution_record(self):
+        datadir = "../Time_domain_solutions/"
+        filename = datadir + self.evolution_file
+        
+        savez(filename,k=self.k,parameters = self.parameters,times =self.sampling_times,evolution_record = self.evolution_record)
+        
 
 if __name__=="__main__":
     omega2 = 20*THz
     omega1 = 0.61803398875*omega2
+    # omega1 = 3/2 * omega2 
     tau    = 10*picosecond
     vF     = 1e5*meter/second
     
@@ -375,6 +412,6 @@ if __name__=="__main__":
     # set_parameters(parameters[0])
     k= array([[ 0.,  0.        , 0      ]])
     
-    S = time_domain_solver(k,parameters)
+    S = time_domain_solver(k,parameters,evolution_file="test")
     t0 = array([0])
     A=S.get_ft([0],500)

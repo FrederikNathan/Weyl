@@ -58,43 +58,44 @@ Files = os.listdir(DataDir)
 
 ### TDS = 0: using RGF solver, TDS=1: using time domain solver; TDS = 2: not known
 def load_archive(update=True):
-    
-    if not update:
-            
-        try:
-            Archive=load(ArchivePath)
-            FileList = list(Archive["FileList"])
-            ParameterList = Archive["ParameterList"]
-            PPointList = Archive["PPointList"]
-            klist = Archive["klist"]
-            P1list = Archive["P1list"]
-            P2list = Archive["P2list"]    
-            Nlist = Archive["Nlist"]
-            NDP = Archive["NDP"]
-            Esslist = Archive["Esslist"]
-            Eeqlist = Archive["Eeqlist"]
-            TDSlist = Archive["TDSlist"]
+    if update:
+        update_archive()
+
+        
+    try:
+        Archive=load(ArchivePath)
+        FileList = list(Archive["FileList"])
+        ParameterList = Archive["ParameterList"]
+        PPointList = Archive["PPointList"]
+        klist = Archive["klist"]
+        P1list = Archive["P1list"]
+        P2list = Archive["P2list"]    
+        Nlist = Archive["Nlist"]
+        NDP = Archive["NDP"]
+        Esslist = Archive["Esslist"]
+        Eeqlist = Archive["Eeqlist"]
+        TDSlist = Archive["TDSlist"]
 #            Convlist = Archive["Convlist"]
 #            Crlist=  Archive["Crlist"]
-        except FileNotFoundError:
-            FileList = []
-            ParameterList = zeros((0,11))
-            PPointList = zeros(0,dtype=int)
-            klist  = zeros((0,3))
-            P1list = zeros(0)
-            P2list = zeros(0)
-            Nlist = zeros(0)
-            NDP   = zeros(0,dtype=int)
-            Esslist = zeros(0)
-            Eeqlist = zeros(0)
-            TDSlist = zeros(0,dtype=int)
-            #            Convlist=zeros((0,2),dtype=int)
+    except FileNotFoundError:
+        FileList = []
+        ParameterList = zeros((0,11))
+        PPointList = zeros(0,dtype=int)
+        klist  = zeros((0,3))
+        P1list = zeros(0)
+        P2list = zeros(0)
+        Nlist = zeros(0)
+        NDP   = zeros(0,dtype=int)
+        Esslist = zeros(0)
+        Eeqlist = zeros(0)
+        TDSlist = zeros(0,dtype=int)
+        #            Convlist=zeros((0,2),dtype=int)
 #            Crlist = zeros(0)
 
-        return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Esslist,Eeqlist,TDSlist
+    return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
 
-    else:
-        return update_archive()
+    # else:
+    #     return update_archive()
         
 
 
@@ -201,7 +202,7 @@ def update_archive():
           TDSlist=TDSlist)
     
                 
-    return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
+    # return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
             
 #class archive():
 #    def __init___(self):            
@@ -234,10 +235,8 @@ def parameterprint(n):
 
     
 print("Loading files")
-FileList,pl,pp,kl,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist = load_archive()    
+FileList,pl,pp,kl,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist = load_archive(update=False)    
 NPARMS = len(NDP)
-
-
 print("   done.\n")
     
      
