@@ -11,13 +11,17 @@ History of module:
 v1: speedup computing of steady states and fourier transform. 
 v4: with linear interpolation in iteration to reduce correction from O(dt) to O(dt^2)
 v9: using SO(3) representation. Using rotating frame interpolator
+
+In case of commensurate frequencies, we average over phase. 
 """
  
 T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 100
-T_RES            = 1000   # time resolution that enters. 
+T_RES            = 10   # time resolution that enters. 
+print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
+# N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
 from scipy import *
@@ -52,9 +56,10 @@ class time_domain_solver():
     
     if save_evolution is specified )As string), evolution is saved at filename specified by the string. 
     """
-    def __init__(self,k,parameters,evolution_file=None):
+    def __init__(self,k,parameters,integration_time,evolution_file=None):
         self.k = k
         self.parameters = parameters
+        self.integration_time = integration_time
         
         assert (evolution_file is None) or type(evolution_file)==str,"save_evolution must be None or str"
         if type(evolution_file)==str:
@@ -65,13 +70,13 @@ class time_domain_solver():
             self.save_evolution = False
             self.evolution_file = ""
         
-        print(evolution_file)
         # Set parameters in weyl liouvillian module
         wl.set_parameters(parameters)
 
         # Unpack parameters
         [self.omega1,self.omega2,self.tau,self.vF,self.V0x,self.V0y,self.V0z,self.EF1,self.EF2,self.Mu,self.Temp]=parameters
 
+        
         # Variables derived from parameters
         self.T1 = 2*pi/self.omega1
         self.T2 = 2*pi/self.omega2
@@ -79,11 +84,28 @@ class time_domain_solver():
         self.P0 = self.omega1*self.omega2/(2*pi)
         self.A1 = self.EF1/self.omega1
         self.A2 = self.EF2/self.omega2
+        self.frequency_ratio = self.omega2/self.omega1
+        
+        self.t_relax = self.get_t_relax()  # time-interval used for relaxing to steady state
+        
+        self.is_commensurate,self.frequency_fraction,self.ext_period = self.is_commensurate()
+        self.integration_window_T1 = self.get_optimal_integration_time_in_periods_of_mode_1()
+        self.NM = self.find_optimal_NM()
+        self.tmax = self.integration_window_T1/self.runs_per_contour*self.T1 
+        self.phi1_0,self.phi2_0 = self.get_initial_phases()
             
+
+
+        self.time_per_sample = self.integration_time/self.NM 
+
         # Set time integration parameters
-        self.dt = self.get_dt()        
+
+
+        # self.tmax = self.tmax_T1 * self.T1 
+        self.res = self.get_res()
+        self.dt  = self.T1/self.res 
         self.tau_factor = 1-exp(-self.dt/self.tau)
-        self.t_relax = T_RELAX * self.tau # time-interval used for relaxing to steady state
+
         
         # Initialize running variables
         self.ns  = 0
@@ -92,24 +114,174 @@ class time_domain_solver():
         self.theta_1 = None
         self.theta_2 = None
         
-        self.N_cache = int(CACHE_ELEMENTS/NMAT_MAX)+1   # number of steps to cache at a time
+        self.N_cache = max(1,int(CACHE_ELEMENTS/NMAT_MAX))   # number of steps to cache at a time
 
-    def get_dt(self):
-        """
-        determine time integration increment. 
-        Increment is an iarrational factor of order 1 times the smallest of 
+        # Find optimal paralellization scheme
+    
+        # self.phase_difference_array = self.get_initial_phases()# linspace(0,2*pi,self.NM+1)[:-1]
+        #self.N_T1*self.T1 * (arange(self.NM)+1000*npr.rand(self.NM))
+  
+        # self.phi1_0  = zeros(self.NM)# 0*ones(self.NM)*self.omega1
+        # self.phi2_0  = self.phi1_0 + self.phase_difference_array
+    
+    def get_t_relax(self):
+        a = T_RELAX * self.tau
+        b = a/self.T1 
+         
+        out = int(b+0.9)*self.T1 
         
-        T1/T_RES, T2/T_RES, tau/T_RES
+        return out 
+    
+    def is_commensurate(self):
+        """ 
+        check if frequencies are commensurate within 1.2 * integration_time.
+        """
+        self.r = arange(1,self.integration_time*1.2/self.T1)*self.T1/self.T2
+        self.r = mod(self.r+0.5,1)-0.5 
+        
+        vec = where(abs(self.r)<1e-10)[0]+1
+        
+        if len(vec)>0:
+  
+            q = amin(vec)
+            p = int((q*self.T1)/self.T2 +0.5)
+            
+            frequency_fraction = (q,p)
+            
+            ext_period = q*self.T1
+        
+
+            return True,frequency_fraction,ext_period
+        
+        else:
+            
+            return False,None,None
+        
+    def get_optimal_integration_time_in_periods_of_mode_1(self):
+        """
+        Find optimal integration window in periods of mode 1 such that 
+        the final phases are close to the initial phases. 
+
 
         Returns
         -------
-        dt, float. 
-            time integration increment.
+        tmax_T1 : int
+            tmax, in units of T1. (i.e., tmax = tmax_T1 * T1)
 
         """
-  
-        return amin(abs(array([self.T1/T_RES,self.T2/T_RES,self.tau/T_RES])))*sqrt(0.5)
+        
+        if self.is_commensurate:
+            
+            tmax_T1 = self.frequency_fraction[0]
+            return tmax_T1 
+        
+            
+        else :
+        
+        
+            # self.a = int(self.integration_time/self.T1)
+        
+            self.b = int(self.integration_time/self.T1*1.2)
+            # First determine tmax 
+            
+            self.v = arange(1,self.b+1)
+            self.d = mod(self.v*self.T1+0.5*self.T2,self.T2)-0.5*self.T2
+            self.d = self.d/(self.v**0.9)
+            a0 = argmin(abs(self.d))
+        
+            tmax_T1 =  self.v[a0]
+            
+            p = int((tmax_T1*self.T1)/self.T2 +0.5)
+            
+        
+            return tmax_T1         
     
+    
+    
+    def find_optimal_NM(self):
+        # raise NotImplementedError("Obsolete method")
+        """
+        Find optimal way of parallelizing time evolution
+
+        Parameters
+        ----------
+        tmax : float
+            evolution time to be probed.
+
+        Returns
+        -------
+        NM : int
+            number of parallel systems to evolve.
+        N_T1 : int
+            number of periods of T1 to evolve over(?).
+
+        """
+
+        # Determine number of separate (quasi-)closed contours
+        self.n_contours = max(1,int(0.5+self.integration_time /(self.T1*self.integration_window_T1)))
+        self.n_contours = min(NMAT_MAX,self.n_contours)
+        
+        
+        # if self.is_commensurate:
+            
+            
+            
+        nml= arange(1,max(2,NMAT_MAX//self.n_contours))*self.n_contours
+        self.cost = self.t_relax * sqrt(100**2+nml**2) + self.T1*self.integration_window_T1*self.n_contours/nml* sqrt(100**2+nml**2)
+        a0 = argmin(self.cost)
+        NM = nml[a0]
+        
+        self.runs_per_contour = NM//self.n_contours
+
+        return NM
+        
+
+    def get_initial_phases(self):
+        
+        phi1list = []
+        phi2list = []
+        
+        
+        
+        contour_distance = 2*pi/self.integration_window_T1
+        
+        for nc in range(0,self.n_contours):
+            phi10 = 0
+            phi20  = contour_distance * nc/self.n_contours     
+            for nr in range(0,self.runs_per_contour):
+                
+                phi1 = mod(phi10 + nr*self.tmax*self.omega1,2*pi)
+                phi2 = mod(phi20 + nr*self.tmax*self.omega2,2*pi)
+                
+                phi1list.append(1*phi1)
+                phi2list.append(1*phi2)
+                
+        
+        phi10_out = array(phi1list)
+        phi20_out = array(phi2list)
+        
+        return phi10_out,phi20_out
+
+
+        
+    def get_res(self):
+        """
+        Get resolution of driving.
+
+        Returns
+        -------
+        res, int
+            Drive resolution.  The time step in the simulation is set to
+            dt = T1 /resoluion..
+
+        """
+        
+        dt0 = amin(abs(array([self.T1/T_RES,self.T2/T_RES,self.tau/T_RES])))*sqrt(0.5)
+        res = int(self.T1/dt0)+1
+        
+        return res
+    
+        
         
     def generate_cache(self):
         """ 
@@ -120,8 +292,15 @@ class time_domain_solver():
         self.hvec_cache[nt,z] gives the hvec(self.k_cache[nt,z])
     
         """
-        self.t_cache = self.t.reshape((1,len(self.t))) + arange(self.N_cache+1).reshape((self.N_cache+1,1))*self.dt
-        self.k_cache =   swapaxes(wl.get_A(self.omega1*(self.t_cache),self.omega2*(self.t_cache)).T,0,1)+self.k 
+        
+        self.t_cache = self.t + arange(self.N_cache+1)
+        
+        
+        self.phi1_cache = self.phi1_0.reshape(1,self.NM) + self.t_cache.reshape((self.N_cache+1,1)) * omega1 
+        self.phi2_cache = self.phi2_0.reshape(1,self.NM) + self.t_cache.reshape((self.N_cache+1,1)) * omega2 
+        
+        # self.k_cache =   swapaxes(wl.get_A(self.omega1*(self.t_cache),self.omega2*(self.t_cache)).T,0,1)+self.k 
+        self.k_cache =   swapaxes(wl.get_A(self.phi1_cache.T,self.phi2_cache.T),0,2)+self.k.reshape((1,1,3))
         self.h_vec_cache = wl.get_h_vec(self.k_cache) 
     
         
@@ -167,9 +346,9 @@ class time_domain_solver():
         self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
 
 
-    def set_steady_state(self,t0):
+    def initialize_steady_state(self):
         """
-        Compute steady state at times in t0. Saves t and rho in self.t and self.rho 
+        Compute steady state at phases (phi1[z],phi2[z]). Saves t and rho in self.t and self.rho 
 
         Parameters
         ----------
@@ -181,20 +360,24 @@ class time_domain_solver():
         None.
 
         """
-        # Number of different initial times to be probed
-        NT0 = len(t0)
+        # assert len(phi1)==len(phi2),"Length of phase arguments must be identical"
+
+        # NT0 = len(phi1)
+        # NS = len(phi1)
+        # NT0 = self.NM
         
         # Set times t_relax back in time. 
-        self.t = t0-1*self.t_relax
+        self.t = -1*self.t_relax
+
         self.generate_cache()
 
         # Set steady state to zero
-        self.rho = zeros((NT0,3))
+        self.rho = zeros((self.NM,3))
         
         ### Counters to monitor progress
 
         # (-1) times the number of steps to evolve before steady state is reached (just used for printing progress)
-        NS = int((self.t[0]-t0[0])/self.dt)+1
+        NS = int((self.t)/self.dt)+1
         # iteration step (just used for printing progress )
         self.ns_ss=0
         B.tic(n=18)
@@ -202,7 +385,7 @@ class time_domain_solver():
         print(f"Computing steady state. Number of iterations : {-NS}");B.tic(n=12)
 
         # Iterate until t reaches t0
-        while self.t[0]-t0[0]<-1e-12:
+        while self.t <-1e-10: #self.t<-1e-12:
             
             # Evolve rho
             self.evolve()
@@ -212,43 +395,18 @@ class time_domain_solver():
             if self.ns_ss % (NS//10)==0:
                 print(f"    progress: {-int(self.ns_ss/NS*100)} %. Time spent: {B.toc(n=18,disp=False):.4} s")
                 sys.stdout.flush()
-            
+        
+        
         print(f"done. Time spent: {B.toc(n=12,disp=0):.4}s")
         print("")
             
-    def find_optimal_NM(self,tmax):
-        """
-        Find optimal way of parallelizing time evolution
 
-        Parameters
-        ----------
-        tmax : float
-            evolution time to be probed.
 
-        Returns
-        -------
-        NM : int
-            number of parallel systems to evolve.
-        N_T1 : int
-            number of periods of T1 to evolve over(?).
-
-        """
-        nml= arange(1,NMAT_MAX)
+    # def find_optimal_NM(self):
+    #     A = self.tmax_T1
         
-        self.cost = T_RELAX*self.tau * sqrt(100**2+nml**2) + tmax/nml* sqrt(100**2+nml**2)
         
-        a0 = argmin(self.cost)
-        NM = nml[a0]
-        
-        if NM > tmax/self.T1:
-            N_T1 = 1
-            
-        else:
-            N_T1 = int(tmax/(self.T1*NM))
-            
-        return NM,N_T1
-        
-    def get_ft(self,freqlist,tmax):
+    def get_ft(self,freqlist):
         """
         Core method. Solve time evolution until tmax and extract frequency 
         components in freqlist as output
@@ -279,56 +437,28 @@ class time_domain_solver():
         N_freqs= len(freqlist)
         freqlist = array(freqlist).reshape((N_freqs,1,1))
 
-        # Find optimal paralellization scheme
-        self.NM,self.N_T1 = self.find_optimal_NM(tmax)
+
         
         # Set initial time of each parallel system to be evolved
-        npr.seed(0)
-        self.t0_array = self.N_T1*self.T1 * (arange(self.NM)+1000*npr.rand(self.NM))
+        # self.phase_difference_array = arange(0,self.NM)/self.NM*2*pi# linspace(0,2*pi,self.NM+1)[:-1]
+        #self.N_T1*self.T1 * (arange(self.NM)+1000*npr.rand(self.NM))
   
-        # initialize rho in steady state at times in t0_array
-        self.set_steady_state(self.t0_array)
-        # """
-        # Begin bypass code
-        # """
-        # print("WARNING: bypassed steady state for testing purposes. Uncomment code before using")
-        # self.rho = array([[ 0.04844703,  0.00797926,  0.18033738],
-        # [ 0.04783463, -0.1675469 ,  0.06433975],
-        # [ 0.0482473 , -0.17545244, -0.03456465],
-        # [ 0.04821787,  0.06624495,  0.16833097],
-        # [ 0.0489186 ,  0.11059038, -0.14374385],
-        # [ 0.04862403,  0.17031926, -0.06484554],
-        # [ 0.04803467, -0.10900376, -0.14273384],
-        # [ 0.04810566, -0.04853653, -0.17350298],
-        # [ 0.04897943,  0.15416626,  0.09543941],
-        # [ 0.04895121,  0.15204543,  0.0987585 ],
-        # [ 0.0478431 , -0.16601233,  0.06825548],
-        # [ 0.04861574,  0.16833781, -0.0697778 ],
-        # [ 0.04835562, -0.16061988, -0.07855107],
-        # [ 0.04911005,  0.16557859,  0.074119  ],
-        # [ 0.04828069,  0.09046061,  0.15680233],
-        # [ 0.04840674, -0.01064955, -0.18009798],
-        # [ 0.04868758, -0.03377451,  0.17703148],
-        # [ 0.04815143, -0.14019981,  0.11239497],
-        # [ 0.04862892, -0.09761597,  0.15107842],
-        # [ 0.048726  ,  0.02554999, -0.17881801],
-        # [ 0.04841289,  0.01344577,  0.18005101],
-        # [ 0.04805615, -0.05743951, -0.1706918 ]])
-        # self.ns_cache = 9514
-        # self.t = 1*self.t0_array
+        # self.phi1_0  = 0*ones(self.NM)
+        # self.phi2_0  = self.phi1_0 + self.phase_difference_array
         
-        # self.generate_cache()
-        # self.ns = 49518
-        # """End of bypass code
-        # """
-
+        
+        
+        
+        # initialize rho in steady state at time 0.
+        self.initialize_steady_state()
+        
         # Initialize output array
         self.Out = zeros((N_freqs,self.NM,3),dtype=complex)
 
         ### Initialize counters
 
         # Total number of iteration steps (just used to print progress)
-        self.NS_ft = -int(((self.t[0])-(self.t0_array[0]+self.T1*self.N_T1))/self.dt)
+        self.NS_ft = -int(((self.t)-self.tmax)/self.dt)
         self.ns0 = 1*self.ns
         self.ns_ft=0
         self.counter = 0
@@ -337,25 +467,26 @@ class time_domain_solver():
         print(f"Computing Fourier transform. Number of iterations : {self.NS_ft}");B.tic(n=11)
        
         
-        self.Nsteps = int(self.T1*self.N_T1/self.dt + 100)
+        self.Nsteps = int(self.tmax/self.dt + 100)
         
         
         if self.save_evolution:
             self.evolution_record = zeros((self.Nsteps,self.NM,3),dtype=float)
             self.sampling_times            = zeros((self.Nsteps,self.NM),dtype=float)
         # Iterate until time exceeds T1*N_T1
-        while self.t[0]-self.t0_array[0] < self.T1*self.N_T1:
+        while self.t < self.tmax:
             
             if self.save_evolution:
                 self.evolution_record[self.ns_ft,:,:]=self.rho
-                self.sampling_times[self.ns_ft,:] = self.t
+                self.sampling_times[self.ns_ft] = self.t
+                
                 
             # Evolve
             self.evolve()
             
             
             # Do "manual" fourier transform, using time-difference (phase from initial time added later)
-            DT = self.t[0]-self.t0_array[0]
+            DT = self.t
             self.Out += exp(1j*freqlist*DT)*self.rho
             
             # print progress
@@ -377,6 +508,7 @@ class time_domain_solver():
             
             
         # Modify initial phases of fourier transform 
+        print("Modify this to reflect the new phase differences.")
         self.Out = self.Out * exp(1j*freqlist*self.t0_array.reshape((1,len(self.t0_array),1)))
         
         # Add together contributions from all initializations 
@@ -388,14 +520,14 @@ class time_domain_solver():
         datadir = "../Time_domain_solutions/"
         filename = datadir + self.evolution_file
         
-        savez(filename,k=self.k,parameters = self.parameters,times =self.sampling_times,evolution_record = self.evolution_record)
+        savez(filename,k=self.k,parameters = self.parameters,times =self.sampling_times,evolution_record = self.evolution_record,phi1_0 = self.phi1_0,phi2_0=self.phi2_0)
         
 
 if __name__=="__main__":
     omega2 = 20*THz
     omega1 = 0.61803398875*omega2
-    # omega1 = 3/2 * omega2 
-    tau    = 10*picosecond
+    omega1 = 1.5000* omega2 
+    tau    = 1*picosecond
     vF     = 1e5*meter/second
     
     EF2 = 0.6*1.5*2e6*Volt/meter
@@ -412,6 +544,15 @@ if __name__=="__main__":
     # set_parameters(parameters[0])
     k= array([[ 0.,  0.        , 0      ]])
     
-    S = time_domain_solver(k,parameters,evolution_file="test")
-    t0 = array([0])
-    A=S.get_ft([0],500)
+    integration_time = 10000
+    S = time_domain_solver(k,parameters,integration_time,evolution_file="test")
+    
+    
+    
+    
+    
+    
+    
+    
+    # t0 = array([0])
+    A=S.get_ft([0])

@@ -22,6 +22,9 @@ v6: using time-domain solver
 v7: fixed negative dissipation issue
 v8: direct computation of <d\phi_2 H> and <d\phi_1 H>
 v9: SO(3) implementation of time-domain solver. Using rotating frame interpolator
+
+
+In case of commensurate frequencies, we average over phase.
 """
 
 NP_MAX                 = 300 # Maximum number of photons before using time domain solver
@@ -200,10 +203,6 @@ def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi,evolution_file=N
     rho1_full = S(relaxation_vector,block_list,mode="l").reshape((len(freq1_list),NP2,2,2)) 
     
     if save_evolution:
-        datadir = "../Frequency_domain_solutions/"
-        filename = datadir + evolution_file
-        
-        savez(filename,k=k,parameters = parameters,freq_1 =nv1,freq_2=nv2,fourier_coefficients = rho1_full)
         
         rho1 = rho1_full[ind,:]
     else:
@@ -238,6 +237,12 @@ def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi,evolution_file=N
     
         nf+=1
 
+    if save_evolution:
+        
+        datadir = "../Frequency_domain_solutions/"
+        filename = datadir + evolution_file
+        
+        savez(filename,k=k,parameters = parameters,freq_1 =nv1,freq_2=nv2,fourier_coefficients_1p = rho1_full,fourier_coefficients_0p=rho0,fourier_coefficients_2p=rho2)
     
     
     return r0p,r1p,r2p,rho1
