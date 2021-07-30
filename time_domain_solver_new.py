@@ -17,8 +17,8 @@ In case of commensurate frequencies, we average over phase.
  
 T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
-NMAT_MAX         = 100
-T_RES            = 100   # time resolution that enters. 
+NMAT_MAX         = 10
+T_RES            = 10   # time resolution that enters. 
 print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
@@ -382,7 +382,7 @@ class time_domain_solver():
     
         """
         
-        self.t_cache = self.t + arange(self.N_cache+1)*self.dt
+        self.t_cache = self.t + arange(self.N_cache+1)
         
         
         self.phi1_cache = self.phi1_0.reshape(1,self.n_par) + self.t_cache.reshape((self.N_cache+1,1)) * self.omega1 
@@ -479,6 +479,7 @@ class time_domain_solver():
         
     def get_ft(self,ind_list):
         
+        
         try:
             
             a = type(ind_list)==list
@@ -492,7 +493,7 @@ class time_domain_solver():
         if not a:
             raise ValueError("ind_list must be list of 2-tuples of integers")            
             
-
+            
         """
         Core method. Solve time evolution until tmax and extract frequency 
         components in freqlist as output
@@ -523,8 +524,7 @@ class time_domain_solver():
         N_freqs= len(ind_list)
         global freqlist
         freqlist = array([i[0] * self.omega1 + i[1]*self.omega2 for i in ind_list]).reshape((N_freqs,1,1))        
-        ind_list  = array(ind_list).reshape(N_freqs,2,1,1)
-        self.Q = ind_list
+        
         # initialize rho in steady state at time 0.
         self.initialize_steady_state()
         
@@ -548,36 +548,22 @@ class time_domain_solver():
         
         if self.save_evolution:
             self.evolution_record = zeros((self.Nsteps,self.n_par,3),dtype=float)
-            self.sampling_phases            = zeros((self.Nsteps,self.n_par,2),dtype=float)
+            self.sampling_times            = zeros((self.Nsteps,self.n_par),dtype=float)
    
         # Iterate until time exceeds T1*N_T1
         while self.t < self.tmax:
-        
-    
-
+            
+            if self.save_evolution:
+                self.evolution_record[self.ns_ft,:,:]=self.rho
+                self.sampling_times[self.ns_ft] = self.t
+                
                 
             # Evolve
             self.evolve()
             
-            phi1 = self.phi1_cache[self.ns_cache]
-            phi2 = self.phi2_cache[self.ns_cache]
-            self.dphi = array([self.omega1*self.t,self.omega2*self.t])
-            # assert amax(abs(phi1-(self.phi1_0+self.omega1*self.t)))<1e-10
-            self.phi = array([phi1,phi2]).reshape((1,2,self.n_par,1))
-            
-            # assert abs(self.t - self.t_cache[self.ns_cache])<1e-10
-            
             # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             DT = self.t
-            # phase_arg = ind_list
-            
-            self.phasemat = exp(1j*(sum(ind_list*self.phi,axis=1)))
-            self.Out += self.phasemat*self.rho
-                
-            if self.save_evolution:
-                self.evolution_record[self.ns_ft,:,:]=1*self.rho
-                self.sampling_phases[self.ns_ft] = self.phi[0,:,:,0].T
-                
+            self.Out += exp(1j*freqlist*DT)*self.rho
             
             # print progress
             self.ns_ft+=1
@@ -592,18 +578,18 @@ class time_domain_solver():
         
         if self.save_evolution:
             self.evolution_record = self.evolution_record[:self.ns_ft]
-            self.sampling_phases  = self.sampling_phases[:self.ns_ft]
+            self.sampling_times   = self.sampling_times[:self.ns_ft]
             
             self.save_evolution_record()
             
             
         # Modify initial phases of fourier transform         
-        # self.x = array([self.phi1_0,self.phi2_0])
-        # self.y = array(ind_list)
+        self.x = array([self.phi1_0,self.phi2_0])
+        self.y = array(ind_list)
         
-        # # self.phaselist = (self.y@self.x).reshape(N_freqs,self.n_par,1)
+        self.phaselist = (self.y@self.x).reshape(N_freqs,self.n_par,1)*0
         
-        # self.Out = self.Out * exp(1j*self.phaselist)
+        self.Out = self.Out * exp(1j*self.phaselist)
         
         # Add together contributions from all initializations 
         self.fourier_transform = sum(self.Out,axis=1)/(self.n_par*(self.ns-self.ns0))
@@ -614,7 +600,7 @@ class time_domain_solver():
         datadir = "../Time_domain_solutions/"
         filename = datadir + self.evolution_file
         
-        savez(filename,k=self.k,parameters = self.parameters,phases =self.sampling_phases,evolution_record = self.evolution_record)
+        savez(filename,k=self.k,parameters = self.parameters,times =self.sampling_times,evolution_record = self.evolution_record,phi1_0 = self.phi1_0,phi2_0=self.phi2_0)
         
 
 if __name__=="__main__":
@@ -649,5 +635,5 @@ if __name__=="__main__":
     
     
     # t0 = array([0])
-    a = [(0,0),(1,2),(3,2),(4,5)]
-    A=S.get_ft(a)
+    indlist = [(0,0),(1,2),(3,2),(4,5)]
+    A=S.get_ft(indlist)

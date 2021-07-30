@@ -18,6 +18,7 @@ from numpy.fft import *
 import numpy.random as npr
 import scipy.optimize as optimize
 import gc
+from scipy.interpolate import griddata
 
 import basic as B
 from units import *
@@ -42,8 +43,8 @@ data = array([P1,P2,density,Eeq,Ess,work])
 fds_dir = "../Frequency_domain_solutions/"
 tds_dir = "../Time_domain_solutions/"
 
-filename_fds = "_1_210729_1141-49.414_0.npz"
-filename_tds = "_1_210729_1113-42.674_0.npz"
+filename_fds = "_1_210730_1510-07.517_0.npz"
+filename_tds = "_1_210730_1510-07.517_0.npz"
 fds_data = load(fds_dir+filename_fds)
 tds_data = load(tds_dir+filename_tds)
 
@@ -61,8 +62,11 @@ V0=array([V0x,V0y,V0z])
 wl.set_parameters(pt)
 
 
-times = tds_data["times"]
+phases    = tds_data["phases"]
 evolution = tds_data["evolution_record"]
+
+
+
 (nt,nr,Null)=shape(evolution)
 f1,f2 = [fds_data[x] for x in ["freq_1","freq_2"]]
 nf1 = len(f1)
@@ -81,18 +85,21 @@ rho_f = array([SX,SY,SZ]).swapaxes(0,1).swapaxes(1,2)
 
 
 
-def get_S_exact(t):
+def get_S_exact(phi):
 
 # t = times[:,0]
     """
-    Get exact bloch vector from frequency domain solutoin at times specified in t
+    Get exact bloch vector from frequency domain solutoin at phases specified in phi
     """
-    nt = len(t)
-    phase1_array = exp(-1j*outer(t,f1)*omega1)
-    phase2_array = exp(-1j*outer(t,f2)*omega2)
+    nt = len(phi)
+    phi1 = phi[:,0]
+    phi2 = phi[:,1]
+    
+    phase1_array = exp(-1j*outer(phi1,f1))
+    phase2_array = exp(-1j*outer(phi2,f2))
     
     out = sum(rho_f.reshape((1,nf1,nf2,3)) * phase1_array.reshape((nt,nf1,1,1))*phase2_array.reshape((nt,1,nf2,1)),axis=(1,2))
-    assert amax(abs(imag(out)))<1e-10,"Imaginary value of output too large"
+    assert amax(abs(imag(out)))<1e-5,f"Imaginary value of output too large: {amax(abs(imag(out)))}"
 
     return real(out)
 
@@ -100,9 +107,13 @@ def get_particle_density(t):
     """
     Get exact particle density from frequency domain solutoin at times specified in t
     """
-    nt = len(t)
-    phase1_array = exp(-1j*outer(t,f1)*omega1)
-    phase2_array = exp(-1j*outer(t,f2)*omega2)
+    nt = len(phi)
+
+    phi1 = phi[:,0]
+    phi2 = phi[:,1]
+    
+    phase1_array = exp(-1j*outer(phi1,f1))
+    phase2_array = exp(-1j*outer(phi2,f2))
     
     Dlist = [D0,D1,D2]
     out = 0
@@ -114,34 +125,34 @@ def get_particle_density(t):
 
     return real(out)
 
-def get_A(t):
-    return wl.get_A(omega1*t,omega2*t).T
+def get_A(phi):
+    phi1 = phi[:,0]
+    phi2 = phi[:,1]
+    return wl.get_A(phi1,phi2).T
 
-def get_energy(bv,density,times):
+def get_energy(bv,density,phi):
     
-    assert len(bv)==len(density)and len(bv)==len(times),"arguments must have the same length"
-    k_eff = get_A(times) + k 
+    assert len(bv)==len(density)and len(bv)==len(phi),"arguments must have the same length"
+    k_eff = get_A(phi) + k 
     E = 2*(vF * sum(k_eff*bv,axis=1)+V0@k_eff.T*density)
     assert amax(abs(imag(E)))<1e-10,"Imaginary value of E too large"
         # return E 1
     return real(E)
 
-NT,NR = shape(times)
+NT,NR = shape(phases)[:2]
 skip = 5 
 
 Esslist = []
 Eeqlist = []
-t=  []
-# for ind in range(0,NR):
-    # print(ind)
-ind = array([1])
-t = times[::skip,ind]
-nt = len(t)
-t = t.reshape((nt*len(ind)),order="F")
-bv_tds = evolution[::skip,ind,:].reshape((nt*len(ind),3),order="F")
 
-bv_fds = get_S_exact(t)
-density = get_particle_density(t)
+ind = 72
+
+phi = phases[::skip,ind,:]
+
+# t = t.reshape((nt*len(ind)),order="F")
+bv_tds = evolution[:,ind,:].reshape((nt,3),order="F")[::skip,:]
+bv_fds = get_S_exact(phi)
+density = get_particle_density(phi)
 diff = norm(bv_fds-bv_tds,axis=1)
 
 
@@ -152,7 +163,7 @@ diff = norm(bv_fds-bv_tds,axis=1)
 
 
 
-kgrid = get_A(t) + k 
+kgrid = get_A(phi) + k 
 R0eq,R1eq,R2eq = wl.get_rhoeq(kgrid,mu=mu)
 H           = wl.get_h(kgrid)
 
@@ -165,8 +176,8 @@ Eeq = real((E0+E1+E2))
 # def get_equilibrium_energy(times):
     
     
-E_tds = get_energy(bv_tds,density,t)
-E_fds = get_energy(bv_fds,density,t)# E2 = 
+E_tds = get_energy(bv_tds,density,phi)
+E_fds = get_energy(bv_fds,density,phi)# E2 = 
 
 Eeqlist.append(E_fds)
 Esslist.append(Eeq)
@@ -174,39 +185,114 @@ Esslist.append(Eeq)
     # timelist.append(t)
 
     
+skip = 10
+# Interpolate values to grid
+bv   = evolution.reshape((nr*nt,3))
+phi1 = mod(phases[:,:,0].flatten(),2*pi)
+phi2 = mod(phases[:,:,1].flatten(),2*pi)
 
-# =============================================================================
-# Plotting
-# =============================================================================
+nphi = 200
+
+ext_indices = where(logical_or(phi1>2*pi*(1-4/nphi),phi2>2*pi*(1-4/nphi)))[0]
+phi1 = concatenate((phi1,phi1[ext_indices]-2*pi))
+phi2 = concatenate((phi2,phi2[ext_indices]))
+phi1 = concatenate((phi1,phi1[ext_indices]))
+phi2 = concatenate((phi2,phi2[ext_indices]-2*pi))
+phi1 = concatenate((phi1,phi1[ext_indices]-2*pi))
+phi2 = concatenate((phi2,phi2[ext_indices]-2*pi))
+bv   = concatenate((bv,bv[ext_indices],bv[ext_indices],bv[ext_indices]))
+phirange=  arange(0,nphi)/nphi * 2*pi
+phi1_g,phi2_g = meshgrid(phirange,phirange)
+
+
+dphi = phirange[1]-phirange[0]
 
 figure(1)
-plot(t,bv_fds,'-')
-plot(t,bv_tds,'-')  
-title("Evolution of Bloch vector vs. time",fontsize=8)
-legend(["x, exact","y, exact","z,exact","x, tds","y,tds","z,tds"],fontsize=6)
-xlabel("time")
+outgrid = griddata((phi1[::skip],phi2[::skip]),bv[::skip,:],(phi1_g,phi2_g),fill_value=0,method="linear")
+pcolormesh(phi1_g,phi2_g,outgrid[:,:,0])
+# plot(phi1,phi2,'.w',markersize=0.1)
+xlim((0,2*pi))
+ylim((0,2*pi))
+colorbar()
+
+
 
 figure(2)
-plot(t,diff)
-title("Difference in bloch vector between tds and exact result",fontsize = 6)
-xlabel("Time")
-ylabel("$|v_{\\rm f}-v_{\\rm t}|$")
-# diff = 
+out = get_S_exact(array((phi1_g.flatten(),phi2_g.flatten())).T).reshape((nphi,nphi,3))
+pcolormesh(phi1_g,phi2_g,out[:,:,0])
+colorbar()
 
 figure(3)
-plot(t,density)
-title("Particle density vs time")
-ylim(0,2.1)
-xlabel("time")
+pcolormesh(phi1_g,phi2_g,out[:,:,0]-outgrid[:,:,0])
+colorbar()
 
 figure(4)
-plot(t,E_fds)
-plot(t,E_tds)
-plot(t,Eeq)
-title("Energy vs. time")
-legend(["Steadystate energy, fds","Steadystate energy, tds","Equilibrium energy"],fontsize=6)
-# energy_difference = 
-xlabel("time")
+plot(phi1,phi2,'.',markersize=0.3)
+xlim(0,2*pi)
+ylim(0,2*pi)
+def get_fourier_component(values,m,n):
+    
+    phasemat = exp(1j*m*phi1_g+1j*n*phi2_g).reshape((nphi,nphi,1))
+    fourier_coeff = sum(phasemat * values,axis=(0,1))*dphi**2/(4*pi**2)
+    
+    return fourier_coeff
+
+a = get_fourier_component(out, 0,0)
+b = get_fourier_component(outgrid, 0,0)    
+    
+
+def check_fourier_match(m,n):
+    # a = get_fourier_component(out, m,n) 
+    a = B.get_bloch_vector(fourier_coeffs[f1==m,f2==n][0])
+    b = get_fourier_component(outgrid, m,n)
+    
+    
+    
+    print(f"Exact                : {around(a,4)}")
+    print(f"TDS                  : {around(b,4)}")
+    print(f"Difference           : {norm(a-b):.4}")
+    print(f"Relative difference  : {norm((a-b))/norm(a):.4} ")
+    
+check_fourier_match(0,0)
+    
+# plot(phi1,phi2,'.')
+# # =============================================================================
+# # Plotting
+# # =============================================================================
+# close("all")
+# phi1 = phi[:,0]
+# phi2 = phi[:,1]
+# figure(1)
+# plot(phi1,bv_fds,'.-')
+# plot(phi1,bv_tds,'.-')  
+# title("Evolution of Bloch vector vs. time",fontsize=8)
+# legend(["x, exact","y, exact","z,exact","x, tds","y,tds","z,tds"],fontsize=6)
+# xlabel("\phi1")
+
+# figure(2)
+# plot(phi1,diff,".-")
+# title("Difference in bloch vector between tds and exact result",fontsize = 6)
+# xlabel("Time")
+# ylabel("$|v_{\\rm f}-v_{\\rm t}|$")
+# # diff = 
+
+# figure(3)
+# plot(phi1,density)
+# title("Particle density vs time")
+# ylim(0,2.1)
+# xlabel("time")
+
+# figure(4)
+# plot(phi1,E_fds)
+# plot(phi1,E_tds)
+# plot(phi1,Eeq)
+# title("Energy vs. time")
+# legend(["Steadystate energy, fds","Steadystate energy, tds","Equilibrium energy"],fontsize=6)
+# # energy_difference = 
+# xlabel("time")
+
+# # figure(5)
+# # plot(mod(phases[:,:10,0].flatten(),2*pi),mod(phases[:,:10,1].flatten(),2*pi),'.')
 
 
 

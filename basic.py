@@ -43,6 +43,14 @@ global T_tic
 T_tic= get_ct()
 tic_list = ones(500)*get_ct()
 
+def get_bloch_vector(rho):
+    """
+    Get bloch vector of 2x2 matrx
+    """
+    
+    out = [trace(x@rho) for x in (0.5*SX,0.5*SY,0.5*SZ)]
+    return array(out)
+
 def tic(n=None):
     global T_tic
     global tic_list
