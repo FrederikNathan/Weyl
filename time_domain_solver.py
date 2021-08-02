@@ -15,17 +15,20 @@ v9: using SO(3) representation. Using rotating frame interpolator
 In case of commensurate frequencies, we average over phase. 
 """
  
-T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
+T_RELAX          = 15 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
-NMAT_MAX         = 100
-T_RES            = 100   # time resolution that enters. 
+NMAT_MAX         = 200
+T_RES            = 200   # time resolution that enters. 
 print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
+PHASE_RESOLUTION = 260  # Phase resolution of solver 
+N_RECORD         = 50000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
 from scipy import *
 import sys 
+from scipy.interpolate import griddata 
 
 from units import *
 import weyl_liouvillian as wl
@@ -56,7 +59,7 @@ class time_domain_solver():
     
     if save_evolution is specified )As string), evolution is saved at filename specified by the string. 
     """
-    def __init__(self,k,parameters,integration_time,evolution_file=None):
+    def __init__(self,k,parameters,integration_time,evolution_file=None,phase_resolution = PHASE_RESOLUTION):
         self.k = k
         self.parameters = parameters
         self.integration_time = integration_time
@@ -98,17 +101,34 @@ class time_domain_solver():
         self.res = self.get_res()
         self.dt  = self.T1/self.res 
         self.tau_factor = 1-exp(-self.dt/self.tau)
-        
+        self.tau_factor_2 = 0.5*(1-exp(-self.dt/self.tau))
+        self.tau_exp = exp(-self.dt/self.tau)
+      
         # Initialize running variables
         self.ns  = 0
         self.rho = None
         self.t   = None
         self.theta_1 = None
         self.theta_2 = None
+        self.n_record = 0 
         
         self.N_cache = max(1,int(CACHE_ELEMENTS/NMAT_MAX))   # number of steps to cache at a time
+        self.N_record =  int(N_RECORD/self.n_par + 1 )
 
-    
+
+        self.n_array   = zeros((phase_resolution,phase_resolution),dtype = int)
+        self.phase_mat = zeros((phase_resolution,phase_resolution,3),dtype=float)
+        self.phi1_list = zeros((self.N_record,self.n_par),dtype = float)
+        self.phi2_list = zeros((self.N_record,self.n_par),dtype = float)
+        self.rho_list = zeros((self.N_record,self.n_par,3),dtype = float)
+        
+        self.interpolation_points =  arange(0.5,PHASE_RESOLUTION+0.5)/PHASE_RESOLUTION * 2*pi
+        self.bin_edges            =  arange(PHASE_RESOLUTION+1)/PHASE_RESOLUTION * 2*pi
+        self.interpolation_grid   =  tuple(meshgrid(self.interpolation_points,self.interpolation_points))
+        
+        self.rho_mat = None 
+        
+        self.solved = False
     def get_t_relax(self):
         a = T_RELAX * self.tau
         b = a/self.T1 
@@ -381,7 +401,8 @@ class time_domain_solver():
         self.hvec_cache[nt,z] gives the hvec(self.k_cache[nt,z])
     
         """
-        
+        B0 = B.tic()
+ 
         self.t_cache = self.t + arange(self.N_cache+1)*self.dt
         
         
@@ -400,6 +421,8 @@ class time_domain_solver():
         # Counter measuringh how far in the cache we are (?)
         self.ns_cache = 0
         
+        B1 = B.toc()
+        self.dB = B1 
     def evolve(self):    
         """ 
         Main iteration.
@@ -409,6 +432,10 @@ class time_domain_solver():
         Also updates ns and cache 
         
         """
+        print("")
+        print("New step")
+        # B.toc()
+        B.tic()
         
         # Load elements from cache
         self.theta_1 = self.theta_1_cache[self.ns_cache]
@@ -416,36 +443,48 @@ class time_domain_solver():
         self.rhoeq1  = self.rhoeq_cache[self.ns_cache]
         self.rhoeq2 = self.rhoeq_cache[self.ns_cache+1]
         
+        (B.toc());B.tic()
         # Update time, iteration step, and cache index
         self.t   += self.dt
         self.ns  += 1
         self.ns_cache+=1 
         
+        (B.toc());B.tic()
         # Generate new cache if cache is empty
         if self.ns_cache==self.N_cache:
             self.ns_cache=0
+            B0 = B.tic()
             self.generate_cache()
-
+            B1 = B.toc()-B.tic()
+            self.dB = B1 
+        (B.toc());B.tic()
         # Compute rho_1 (used as an intermediate step in computation of steady state)
-        self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
-        
+        # self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
+        self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
+
+        (B.toc());B.tic()
+       
         # Update rho
         
         self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
-        self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
-
+        (B.toc());B.tic()
+        
+        # self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
+        self.rho   += self.tau_factor_2*self.rhoeq2
+        (B.toc())
 
     def initialize_steady_state(self):
         """
         Compute steady state at phases (phi1_0[z],phi2_0[z]). Saves t and rho in self.t and self.rho 
 
         """
-   
+        
+        B.tic()
         # Set times t_relax back in time. 
         self.t = -1*self.t_relax
 
         self.generate_cache()
-
+        print(B.toc())
         # Set steady state to zero
         self.rho = zeros((self.n_par,3))
         
@@ -476,22 +515,48 @@ class time_domain_solver():
         print(f"done. Time spent: {B.toc(n=12,disp=0):.4}s")
         print("")
                     
+    def record(self):
+        """
+        Record raw data to phase_array
+
+        Returns
+        -------
+        None.
+
+        """
+        global cumulated_data
+        phi1_out = mod(self.phi1_list[:self.n_record,:],2*pi).flatten()
+        phi2_out = mod(self.phi2_list[:self.n_record,:],2*pi).flatten()
         
-    def get_ft(self,ind_list):
+        assert amax(phi1_out)<2*pi
+        assert amax(phi2_out)<2*pi
         
-        try:
+        # bin_edges = arange(0,PHASE_RESOLUTION+1)/PHASE_RESOLUTION * 2*pi
+        
+        self.H = (0.5+histogram2d(phi1_out,phi2_out,self.bin_edges)[0]).astype(int)
+        
+        self.n_array += self.H
+        
+        Ind = where(self.H>0)
+        
+        for d in range(0,3):
+            rho_out = self.rho_list[:self.n_record,:,d].flatten()
             
-            a = type(ind_list)==list
-            a *= len(ind_list)>0
-            for f in ind_list:
-                a*= type(f)==tuple
-                a*= len(f)==2
-                a*= type(f[0])==int and type(f[1])==int
-        except:
-            a=0
-        if not a:
-            raise ValueError("ind_list must be list of 2-tuples of integers")            
+   
+            cumulated_data = griddata((phi1_out,phi2_out),rho_out,self.interpolation_grid,method="nearest",fill_value = nan)
             
+            self.phase_mat[:,:,d]+= 1*cumulated_data*self.H
+            
+        
+        self.n_record = 0
+        
+        
+            
+        
+        
+        
+    def solve(self):
+        
 
         """
         Core method. Solve time evolution until tmax and extract frequency 
@@ -519,17 +584,9 @@ class time_domain_solver():
             where rho(t) denotes the bloch vector of the steady state at time t
         """
         
-        # Reshape freqlist to the right dimensionality
-        N_freqs= len(ind_list)
-        global freqlist
-        freqlist = array([i[0] * self.omega1 + i[1]*self.omega2 for i in ind_list]).reshape((N_freqs,1,1))        
-        ind_list  = array(ind_list).reshape(N_freqs,2,1,1)
-        self.Q = ind_list
+        B.tic()
         # initialize rho in steady state at time 0.
         self.initialize_steady_state()
-        
-        # Initialize output array
-        self.Out = zeros((N_freqs,self.n_par,3),dtype=complex)
 
         ### Initialize counters
 
@@ -562,17 +619,23 @@ class time_domain_solver():
             phi1 = self.phi1_cache[self.ns_cache]
             phi2 = self.phi2_cache[self.ns_cache]
             self.dphi = array([self.omega1*self.t,self.omega2*self.t])
-            # assert amax(abs(phi1-(self.phi1_0+self.omega1*self.t)))<1e-10
             self.phi = array([phi1,phi2]).reshape((1,2,self.n_par,1))
             
-            # assert abs(self.t - self.t_cache[self.ns_cache])<1e-10
+            self.phi1_list[self.n_record] = 1*phi1
+            self.phi2_list[self.n_record] = 1*phi2            
+            self.rho_list[self.n_record]  = 1*self.rho
+            self.n_record += 1 
             
-            # Do "manual" fourier transform, using time-difference (phase from initial time added later)
-            DT = self.t
-            # phase_arg = ind_list
+            if self.n_record % self.N_record == 0:
+                self.record()
             
-            self.phasemat = exp(1j*(sum(ind_list*self.phi,axis=1)))
-            self.Out += self.phasemat*self.rho
+            
+            # # Do "manual" fourier transform, using time-difference (phase from initial time added later)
+            # DT = self.t
+            # # phase_arg = ind_list
+            
+            # self.phasemat = exp(1j*(sum(ind_list*self.phi,axis=1)))
+            # self.Out += self.phasemat*self.rho
                 
             if self.save_evolution:
                 self.evolution_record[self.ns_ft,:,:]=1*self.rho
@@ -586,8 +649,11 @@ class time_domain_solver():
                 sys.stdout.flush()
                 self.counter+=1 
         
+        self.record()
+        self.rho_mat = self.get_rho_mat()
         print(f"done. Time spent: {B.toc(n=11,disp=0):.4}s")
         print("")
+        
         
         
         if self.save_evolution:
@@ -596,20 +662,96 @@ class time_domain_solver():
             
             self.save_evolution_record()
             
-            
-        # Modify initial phases of fourier transform         
-        # self.x = array([self.phi1_0,self.phi2_0])
-        # self.y = array(ind_list)
+        self.solved = True
+        # # Add together contributions from all initializations 
+        # self.fourier_transform = sum(self.Out,axis=1)/(self.n_par*(self.ns-self.ns0))
         
-        # # self.phaselist = (self.y@self.x).reshape(N_freqs,self.n_par,1)
-        
-        # self.Out = self.Out * exp(1j*self.phaselist)
-        
-        # Add together contributions from all initializations 
-        self.fourier_transform = sum(self.Out,axis=1)/(self.n_par*(self.ns-self.ns0))
-        
-        return self.fourier_transform
+        # return self.fourier_transform
 
+    def get_rho_mat(self):
+        
+        A0 = amin(self.n_array)
+        global x,y,yo,p1,p1o
+        if A0>0:
+            return self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
+        
+        else:
+            X = self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
+            Ind = where(self.n_array>0)
+            y = X[Ind]
+            (phi1,phi2) = self.interpolation_grid
+            
+            
+            p1 = phi1[Ind]
+            p2 = phi2[Ind]
+            
+            np = len(p1)
+            p1o = zeros((9*np))
+            p2o = zeros((9*np))
+            yo  = zeros((9*np,3))
+            
+            nit = 0 
+            for n1 in [-1,0,1]:
+                for n2 in [-1,0,1]:
+                   p1o[nit*np:(nit+1)*np]=p1+n1*2*pi
+                   p2o[nit*np:(nit+1)*np]=p2+n2*2*pi
+                   yo[nit*np:(nit+1)*np,:]=y
+                   
+                   nit += 1 
+                   
+                   
+            p1o,p2o,yo =[array(x) for x in [p1o,p2o,yo]]
+            
+                        
+            Ind = where((abs(p1o-pi)<3*pi/2)*(abs(p2o-pi)<3*pi/2))
+                        
+            p1o =  p1o[Ind]
+            p2o =  p2o[Ind]
+            yo =  yo[Ind]    
+            
+            
+            g_out = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3),dtype=float)
+            # Ind = where(self.n_array==0)
+            for d in range(0,3):
+                g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
+            
+            return g_out
+            
+        
+        
+    def get_fourier_component(self,m,n):
+    
+        if not (type(m)==int and type(n)==int):
+            
+            raise ValueError("m and n must be integers")
+    
+        if not self.solved:
+            self.solve()   
+            
+        phasemat = exp(1j*(m*self.interpolation_grid[0]+n*self.interpolation_grid[1])).reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
+        
+        nphi =  prod(shape(phasemat))
+        out      = sum(phasemat*self.rho_mat,axis=(0,1))/nphi
+        
+        
+        return out 
+    
+    def get_ft(self,freqlist):
+        
+        no = 0
+        out = zeros((len(freqlist),3),dtype=complex)
+        for ind in freqlist:
+            (m,n) = ind
+            out[no] = 1*self.get_fourier_component(m, n)
+            
+            no+=1 
+            
+        return out 
+            
+            
+            
+        
+        
     def save_evolution_record(self):
         datadir = "../Time_domain_solutions/"
         filename = datadir + self.evolution_file
@@ -620,12 +762,12 @@ class time_domain_solver():
 if __name__=="__main__":
     omega2 = 20*THz
     omega1 = 0.61803398875*omega2
-    omega1 = 1.5000* omega2 
+    # omega1 = 1.5000* omega2 
     tau    = 1*picosecond
     vF     = 1e5*meter/second
     
+    EF1 = 0.6*1.25*1.2e6*Volt/meter*0.
     EF2 = 0.6*1.5*2e6*Volt/meter
-    EF1 = 0.6*1.25*1.2e6*Volt/meter*1e-10
     
     T1 = 2*pi/omega1
     
@@ -636,9 +778,9 @@ if __name__=="__main__":
     [V0x,V0y,V0z] = V0
     parameters = 1*array([omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp])
     # set_parameters(parameters[0])
-    k= array([[ 0.,  0.        , 0      ]])
+    k= array([[ 0.1,  0       , 0      ]])
     
-    integration_time = 10000
+    integration_time = 1000
     S = time_domain_solver(k,parameters,integration_time,evolution_file="test")
     
     
@@ -647,7 +789,43 @@ if __name__=="__main__":
     
     
     
-    
+    #%%
     # t0 = array([0])
-    a = [(0,0),(1,2),(3,2),(4,5)]
-    A=S.get_ft(a)
+    # a = [(0,0),(1,2),(3,2),(4,5)]
+    # A=S.get_phase_mat()
+    B = S.get_fourier_component(0,1)
+    phi1= mod(S.sampling_phases[:,:,0].flatten(),2*pi)
+    phi2= mod(S.sampling_phases[:,:,1].flatten(),2*pi)
+    
+    from matplotlib.pyplot import *
+    
+    X,Y = meshgrid(S.bin_edges,S.bin_edges)
+    figure(1)
+    pcolormesh(X,Y,S.n_array.T)
+    ylim((0,amax(S.n_array)))
+    plot(phi1,phi2,'.w',markersize = 1)
+    title("Number of data points")
+    xlabel("$\phi_1$")
+    ylabel("$\phi_2$")
+    xlim(0,2*pi)
+    ylim(0,2*pi)
+    figure(2)
+    pcolormesh(X,Y,S.phase_mat[:,:,0])
+    # plot(phi1,phi2,'.w',markersize = 0.1)    
+    title("Accumulated data")
+    xlabel("$\phi_1$")
+    ylabel("$\phi_2$")
+    
+    figure(3)
+    pcolormesh(X,Y,S.phase_mat[:,:,0]/S.n_array)
+    # plot(phi1,phi2,'.w',markersize = 0.4)
+    title("Acc. Data/Number of data points")
+    xlabel("$\phi_1$")
+    ylabel("$\phi_2$")
+    
+    figure(4)
+    pcolormesh(X,Y,S.rho_mat[:,:,2]);colorbar()
+    # plot(phi1,phi2,'.w',markersize = 0.4)
+    title("Interpolated")
+    xlabel("$\phi_1$")
+    ylabel("$\phi_2$")

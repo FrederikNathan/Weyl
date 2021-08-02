@@ -27,14 +27,14 @@ v9: SO(3) implementation of time-domain solver. Using rotating frame interpolato
 In case of commensurate frequencies, we average over phase.
 """
 
-NP_MAX                 = 3 # Maximum number of photons before using time domain solver
+NP_MAX                 = 30 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
-CONVERGENCE_TRESHOLD   = 1e-6
-TMAX_IN_MODE1_PERIODS  = 1000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
+CONVERGENCE_TRESHOLD   = 1e-8
+TMAX_IN_MODE1_PERIODS  = 10000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
 # TMAX_IN_MODE1_PERIODS  = 100 # override for testing
-SAVE_STEADYSTATE       = True
+SAVE_STEADYSTATE       = False
 
 print("WARNING: saving evolution data ")
 import os 
@@ -197,10 +197,9 @@ def rgf_solve_steadystate(k,parameters,NP1,NP2,freqlist,mu,Nphi,evolution_file=N
     def get_h(n):
         return h0 + omega1*1j*nv1[n]*rgf_eye
     
-    
     S = rgf.rgf_solver([0]*NP1,J,Jp)
     S.get_h0 = get_h
-
+    S_rgf = S 
     rho1_full = S(relaxation_vector,block_list,mode="l").reshape((len(freq1_list),NP2,2,2)) 
     
     if save_evolution:
@@ -280,11 +279,11 @@ def time_domain_solve_steadystate(k,parameters,freqlist,mu,Nphi,tmax,evolution_f
     
     freqs = [omega1*m+omega2*n for (m,n) in freqlist]
     nfreqs = len(freqlist)
-    # global Solver,r2p,r1p,r0p
-    global S
+    global Solver,r2p,r1p,r0p
+    global S_tds 
     Solver = tds.time_domain_solver(k,parameters,tmax,evolution_file=evolution_file)
     r1p_vec =  Solver.get_ft(freqlist)
-    S=Solver
+    S_tds =Solver
     
     ### computing r_2p and r_0p
     FR0,FR1,FR2 = get_rhoeq_vector(k,parameters,Nphi,Nphi,mu=mu,Nphi=Nphi)
@@ -367,7 +366,7 @@ def get_steady_state_components(k,parameters,freqlist,NP0=INITIAL_NP,convergence
     ### reference output from last iteration used to determine convergence (set to zero for the first iteration)
     ReferenceRho = zeros((nfreqs,2,2),dtype=complex)
 
-
+    
     while True:
 
         NP2 = NP1 
@@ -540,7 +539,7 @@ def solve_weyl(k,parameters,NP0=INITIAL_NP,convergence_treshold=CONVERGENCE_TRES
          tmax = TMAX_IN_MODE1_PERIODS*2*pi/omega1
 
     [omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,mu,Temp]  =  parameters
-
+    global r1 
     r0,r1,r2,use_tds = get_steady_state_components(
             k,
             parameters,
@@ -791,28 +790,36 @@ if __name__=="__main__":
     # filename_fds = "_1_210729_1114-06.037_0.npz"
     # fds_data = load(fds_dir+filename_fds)
 
+
     
     # parameters  = fds_data["parameters"]
     # k           = fds_data["k"]
     omega2  = 20*THz
     omega1  = 0.61803398875*omega2
-    omega1  = 1.50001*omega2
+    # omega1  = 1.5000*omega2
     tau     = 0.1*picosecond
     vF      = 1e6*meter/second
     EF2     = 0.6*1.5*2e6*Volt/meter 
     EF1     = 0.6*1.25*1.2e6*Volt/meter  
 
     
-    Mu      = 115*0.1
+    Mu      = 115
     Temp    = 20*Kelvin*0.1;
-    V0      = array([0,0,0.0*vF])
+    V0      = array([0,0,0.8*vF])
     [V0x,V0y,V0z] = V0
     
-    klist= array([[ 0.08,  0.        , 0.      ]])
+    parameters = array([2.98881237e+00, 4.83600000e+00, 3.30851944e+03, 2.41800000e+03,
+       0.00000000e+00, 0.00000000e+00, 1.93440000e+03, 9.00000000e-02,
+       1.80000000e-01, 1.15000000e+02, 1.72400000e+00])
+    
+    
+    omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
+    
+    tau = 1* picosecond
+    klist= array([[ 0,  0.        ,0.04    ]])
     parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
     parameters = parameterlist[0]
     k = klist[0]
-    omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
     parameterlist = 1*array([parameters])
     klist= array([k])
 

@@ -46,9 +46,7 @@ from basic import *
 
 
     
-
-
-def rotate(rotation_vector,vector):
+def efficient_rotate(rotation_vector_direction,cosnorm,sinnorm,vector):
     nv = norm(rotation_vector,axis=-1,keepdims=1)
     vn = rotation_vector/nv
     
@@ -57,6 +55,27 @@ def rotate(rotation_vector,vector):
     
     out = c*vector + (1-c)*vn*sum(vn*vector,axis=-1,keepdims=1) + s * cross(vn,vector)
     
+    return out
+
+
+def rotate(rotation_vector,vector):
+    # print("\nRotating")
+    # tic()
+    nv = norm(rotation_vector,axis=-1,keepdims=1)
+    vn = rotation_vector/nv
+    # toc();tic()
+    c = cos(nv)
+    s = sin(nv)
+    # toc();tic()
+    out = c*vector 
+    # toc();tic()
+
+    out += (1-c)*vn*sum(vn*vector,axis=-1,keepdims=1)
+    
+    # toc();tic()
+
+    out += s * cross(vn,vector)
+    # toc();print("")
     return out
 
 

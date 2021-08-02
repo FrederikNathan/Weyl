@@ -43,8 +43,8 @@ data = array([P1,P2,density,Eeq,Ess,work])
 fds_dir = "../Frequency_domain_solutions/"
 tds_dir = "../Time_domain_solutions/"
 
-filename_fds = "_1_210730_1510-07.517_0.npz"
-filename_tds = "_1_210730_1510-07.517_0.npz"
+filename_fds = "_1_210730_1611-07.994_0.npz"
+filename_tds = "_1_210730_1611-15.161_0.npz"
 fds_data = load(fds_dir+filename_fds)
 tds_data = load(tds_dir+filename_tds)
 
@@ -145,7 +145,7 @@ skip = 5
 Esslist = []
 Eeqlist = []
 
-ind = 72
+ind = 2
 
 phi = phases[::skip,ind,:]
 
@@ -191,6 +191,7 @@ bv   = evolution.reshape((nr*nt,3))
 phi1 = mod(phases[:,:,0].flatten(),2*pi)
 phi2 = mod(phases[:,:,1].flatten(),2*pi)
 
+# raise ValueError
 nphi = 200
 
 ext_indices = where(logical_or(phi1>2*pi*(1-4/nphi),phi2>2*pi*(1-4/nphi)))[0]
@@ -206,10 +207,10 @@ phi1_g,phi2_g = meshgrid(phirange,phirange)
 
 
 dphi = phirange[1]-phirange[0]
-
+#%%
 figure(1)
 outgrid = griddata((phi1[::skip],phi2[::skip]),bv[::skip,:],(phi1_g,phi2_g),fill_value=0,method="linear")
-pcolormesh(phi1_g,phi2_g,outgrid[:,:,0])
+pcolormesh(phi1_g,phi2_g,outgrid[:,:,2])
 # plot(phi1,phi2,'.w',markersize=0.1)
 xlim((0,2*pi))
 ylim((0,2*pi))
@@ -219,7 +220,7 @@ colorbar()
 
 figure(2)
 out = get_S_exact(array((phi1_g.flatten(),phi2_g.flatten())).T).reshape((nphi,nphi,3))
-pcolormesh(phi1_g,phi2_g,out[:,:,0])
+pcolormesh(phi1_g,phi2_g,out[:,:,2])
 colorbar()
 
 figure(3)
