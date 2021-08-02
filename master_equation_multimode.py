@@ -27,12 +27,12 @@ v9: SO(3) implementation of time-domain solver. Using rotating frame interpolato
 In case of commensurate frequencies, we average over phase.
 """
 
-NP_MAX                 = 30 # Maximum number of photons before using time domain solver
+NP_MAX                 = 300 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
 CONVERGENCE_TRESHOLD   = 1e-8
-TMAX_IN_MODE1_PERIODS  = 10000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
+TMAX_IN_MODE1_PERIODS  = 500 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
 # TMAX_IN_MODE1_PERIODS  = 100 # override for testing
 SAVE_STEADYSTATE       = False
 
@@ -816,7 +816,7 @@ if __name__=="__main__":
     omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
     
     tau = 1* picosecond
-    klist= array([[ 0,  0.        ,0.04    ]])
+    klist= array([[ 0,  0.        ,0.09    ]])
     parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
     parameters = parameterlist[0]
     k = klist[0]

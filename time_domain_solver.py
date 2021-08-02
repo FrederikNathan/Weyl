@@ -18,11 +18,11 @@ In case of commensurate frequencies, we average over phase.
 T_RELAX          = 15 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 200
-T_RES            = 200   # time resolution that enters. 
+T_RES            = 300   # time resolution that enters. 
 print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
-PHASE_RESOLUTION = 260  # Phase resolution of solver 
-N_RECORD         = 50000
+PHASE_RESOLUTION = 300  # Phase resolution of solver 
+N_RECORD         = 1000000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
@@ -418,6 +418,15 @@ class time_domain_solver():
         self.theta_1_cache,self.theta_2_cache = so3.rotating_frame_interpolator(self.h_vec_cache,self.dt)
         self.rhoeq_cache = wl.get_rhoeq_vec(self.k_cache.reshape(((self.N_cache+1)*self.n_par,3)),mu=self.Mu).reshape(self.N_cache+1,self.n_par,3)
         
+        
+        theta_1_norm = norm(self.theta_1_cache,axis=2,keepdims=1)
+        theta_2_norm = norm(self.theta_2_cache,axis=2,keepdims=1)
+        self.cosnorm_1_cache = cos(theta_1_norm)
+        self.cosnorm_2_cache = cos(theta_2_norm)
+        self.sinnorm_1_cache = sin(theta_1_norm)
+        self.sinnorm_2_cache = sin(theta_2_norm)
+        self.rvd_1_cache = self.theta_1_cache/theta_1_norm
+        self.rvd_2_cache = self.theta_2_cache/theta_2_norm
         # Counter measuringh how far in the cache we are (?)
         self.ns_cache = 0
         
@@ -432,10 +441,10 @@ class time_domain_solver():
         Also updates ns and cache 
         
         """
-        print("")
-        print("New step")
+        # print("")
+        # print("New step")
         # B.toc()
-        B.tic()
+        # B.tic()
         
         # Load elements from cache
         self.theta_1 = self.theta_1_cache[self.ns_cache]
@@ -443,35 +452,43 @@ class time_domain_solver():
         self.rhoeq1  = self.rhoeq_cache[self.ns_cache]
         self.rhoeq2 = self.rhoeq_cache[self.ns_cache+1]
         
-        (B.toc());B.tic()
+        cosnorm_1= self.cosnorm_1_cache[self.ns_cache]
+        cosnorm_2= self.cosnorm_2_cache[self.ns_cache]
+        sinnorm_1= self.sinnorm_1_cache[self.ns_cache]
+        sinnorm_2= self.sinnorm_2_cache[self.ns_cache]
+        rvd_1= self.rvd_1_cache[self.ns_cache]
+        rvd_2= self.rvd_2_cache[self.ns_cache]
+# 
+        # (B.toc());B.tic()
         # Update time, iteration step, and cache index
         self.t   += self.dt
         self.ns  += 1
         self.ns_cache+=1 
         
-        (B.toc());B.tic()
+        # (B.toc());B.tic()
         # Generate new cache if cache is empty
         if self.ns_cache==self.N_cache:
             self.ns_cache=0
-            B0 = B.tic()
+            # B0 = B.tic()
             self.generate_cache()
-            B1 = B.toc()-B.tic()
-            self.dB = B1 
-        (B.toc());B.tic()
+            # B1 = B.toc()-B.tic()
+            # self.dB = B1 
+        # (B.toc());B.tic()
         # Compute rho_1 (used as an intermediate step in computation of steady state)
         # self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
         self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
 
-        (B.toc());B.tic()
+        # (B.toc());B.tic()
        
         # Update rho
-        
-        self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
-        (B.toc());B.tic()
+        # self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
+
+        self.rho   = so3.efficient_rotate(rvd_2, cosnorm_2, sinnorm_2,so3.efficient_rotate(rvd_1,cosnorm_1,sinnorm_1,self.rho_1))
+        # (B.toc());B.tic()
         
         # self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
         self.rho   += self.tau_factor_2*self.rhoeq2
-        (B.toc())
+        # (B.toc())
 
     def initialize_steady_state(self):
         """
@@ -524,12 +541,12 @@ class time_domain_solver():
         None.
 
         """
-        global cumulated_data
+        # global cumulated_data
         phi1_out = mod(self.phi1_list[:self.n_record,:],2*pi).flatten()
         phi2_out = mod(self.phi2_list[:self.n_record,:],2*pi).flatten()
         
-        assert amax(phi1_out)<2*pi
-        assert amax(phi2_out)<2*pi
+        # assert amax(phi1_out)<2*pi
+        # assert amax(phi2_out)<2*pi
         
         # bin_edges = arange(0,PHASE_RESOLUTION+1)/PHASE_RESOLUTION * 2*pi
         
@@ -627,8 +644,9 @@ class time_domain_solver():
             self.n_record += 1 
             
             if self.n_record % self.N_record == 0:
+                print("Recording");B.tic()
                 self.record()
-            
+                B.toc()
             
             # # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             # DT = self.t
