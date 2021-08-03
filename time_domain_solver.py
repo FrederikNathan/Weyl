@@ -15,20 +15,20 @@ v9: using SO(3) representation. Using rotating frame interpolator
 In case of commensurate frequencies, we average over phase. 
 """
  
-T_RELAX          = 15 # time-interval used for relaxing to steady state, in units of tau.
+T_RELAX          = 12 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
-NMAT_MAX         = 200
+NMAT_MAX         = 100
 T_RES            = 300   # time resolution that enters. 
-print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
+# print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
-PHASE_RESOLUTION = 300  # Phase resolution of solver 
+PHASE_RESOLUTION = 1500  # Phase resolution of solver 
 N_RECORD         = 1000000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
 from scipy import *
 import sys 
-from scipy.interpolate import griddata 
+from scipy.interpolate import griddata,LinearNDInterpolator
 
 from units import *
 import weyl_liouvillian as wl
@@ -403,9 +403,15 @@ class time_domain_solver():
         """
         B0 = B.tic()
  
-        self.t_cache = self.t + arange(self.N_cache+1)*self.dt
+    
+        # npr.seed(int(t))
         
-        
+        dt_cache = rand(self.N_cache+1)
+        dt_cache = cumsum(dt_cache)
+        dt_cache = dt_cache * self.N_cache*self.dt/amax(dt_cache)
+        # self.t_cache = self.t + arange(self.N_cache+1)*self.dt
+        self.t_cache = self.t + dt_cache 
+        self.dt_cache = self.t_cache[1:]-self.t_cache[:-1]
         self.phi1_cache = self.phi1_0.reshape(1,self.n_par) + self.t_cache.reshape((self.N_cache+1,1)) * self.omega1 
         self.phi2_cache = self.phi2_0.reshape(1,self.n_par) + self.t_cache.reshape((self.N_cache+1,1)) * self.omega2 
         
@@ -415,23 +421,23 @@ class time_domain_solver():
     
         
         # do rotating frame interpolation. 
-        self.theta_1_cache,self.theta_2_cache = so3.rotating_frame_interpolator(self.h_vec_cache,self.dt)
+        theta_1_cache,theta_2_cache = so3.rotating_frame_interpolator(self.h_vec_cache,self.dt_cache)
         self.rhoeq_cache = wl.get_rhoeq_vec(self.k_cache.reshape(((self.N_cache+1)*self.n_par,3)),mu=self.Mu).reshape(self.N_cache+1,self.n_par,3)
         
         
-        theta_1_norm = norm(self.theta_1_cache,axis=2,keepdims=1)
-        theta_2_norm = norm(self.theta_2_cache,axis=2,keepdims=1)
+        theta_1_norm = norm(theta_1_cache,axis=2,keepdims=1)
+        theta_2_norm = norm(theta_2_cache,axis=2,keepdims=1)
         self.cosnorm_1_cache = cos(theta_1_norm)
         self.cosnorm_2_cache = cos(theta_2_norm)
         self.sinnorm_1_cache = sin(theta_1_norm)
         self.sinnorm_2_cache = sin(theta_2_norm)
-        self.rvd_1_cache = self.theta_1_cache/theta_1_norm
-        self.rvd_2_cache = self.theta_2_cache/theta_2_norm
+        self.rvd_1_cache = theta_1_cache/theta_1_norm
+        self.rvd_2_cache = theta_2_cache/theta_2_norm
         # Counter measuringh how far in the cache we are (?)
         self.ns_cache = 0
         
-        B1 = B.toc()
-        self.dB = B1 
+        # raise ValueError 
+        
     def evolve(self):    
         """ 
         Main iteration.
@@ -441,54 +447,46 @@ class time_domain_solver():
         Also updates ns and cache 
         
         """
-        # print("")
-        # print("New step")
-        # B.toc()
-        # B.tic()
+
         
         # Load elements from cache
-        self.theta_1 = self.theta_1_cache[self.ns_cache]
-        self.theta_2 = self.theta_2_cache[self.ns_cache]
+        # self.theta_1 = theta_1_cache[self.ns_cache]
+        # self.theta_2 = self.theta_2_cache[self.ns_cache]
         self.rhoeq1  = self.rhoeq_cache[self.ns_cache]
         self.rhoeq2 = self.rhoeq_cache[self.ns_cache+1]
         
-        cosnorm_1= self.cosnorm_1_cache[self.ns_cache]
-        cosnorm_2= self.cosnorm_2_cache[self.ns_cache]
-        sinnorm_1= self.sinnorm_1_cache[self.ns_cache]
-        sinnorm_2= self.sinnorm_2_cache[self.ns_cache]
-        rvd_1= self.rvd_1_cache[self.ns_cache]
-        rvd_2= self.rvd_2_cache[self.ns_cache]
-# 
-        # (B.toc());B.tic()
+        self.cosnorm_1= self.cosnorm_1_cache[self.ns_cache]
+        self.cosnorm_2= self.cosnorm_2_cache[self.ns_cache]
+        self.sinnorm_1= self.sinnorm_1_cache[self.ns_cache]
+        self.sinnorm_2= self.sinnorm_2_cache[self.ns_cache]
+        self.rvd_1= self.rvd_1_cache[self.ns_cache]
+        self.rvd_2= self.rvd_2_cache[self.ns_cache]
+
         # Update time, iteration step, and cache index
         self.t   += self.dt
         self.ns  += 1
         self.ns_cache+=1 
         
-        # (B.toc());B.tic()
+
         # Generate new cache if cache is empty
         if self.ns_cache==self.N_cache:
             self.ns_cache=0
-            # B0 = B.tic()
             self.generate_cache()
-            # B1 = B.toc()-B.tic()
-            # self.dB = B1 
-        # (B.toc());B.tic()
+
+
         # Compute rho_1 (used as an intermediate step in computation of steady state)
         # self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
         self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
 
-        # (B.toc());B.tic()
-       
+ 
         # Update rho
         # self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
 
-        self.rho   = so3.efficient_rotate(rvd_2, cosnorm_2, sinnorm_2,so3.efficient_rotate(rvd_1,cosnorm_1,sinnorm_1,self.rho_1))
-        # (B.toc());B.tic()
+        self.rho   = so3.efficient_rotate(self.rvd_2, self.cosnorm_2, self.sinnorm_2,so3.efficient_rotate(self.rvd_1,self.cosnorm_1,self.sinnorm_1,self.rho_1))
         
         # self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
         self.rho   += self.tau_factor_2*self.rhoeq2
-        # (B.toc())
+
 
     def initialize_steady_state(self):
         """
@@ -501,7 +499,7 @@ class time_domain_solver():
         self.t = -1*self.t_relax
 
         self.generate_cache()
-        print(B.toc())
+
         # Set steady state to zero
         self.rho = zeros((self.n_par,3))
         
@@ -541,6 +539,9 @@ class time_domain_solver():
         None.
 
         """
+        # print("")
+        # print("Recording")
+        B.tic()
         # global cumulated_data
         phi1_out = mod(self.phi1_list[:self.n_record,:],2*pi).flatten()
         phi2_out = mod(self.phi2_list[:self.n_record,:],2*pi).flatten()
@@ -567,7 +568,7 @@ class time_domain_solver():
         
         self.n_record = 0
         
-        
+        B.toc()
             
         
         
@@ -644,9 +645,9 @@ class time_domain_solver():
             self.n_record += 1 
             
             if self.n_record % self.N_record == 0:
-                print("Recording");B.tic()
+                print("Recording");B.tic(n=68)
                 self.record()
-                B.toc()
+                print(f"Time spent: {B.toc(n=68,disp=False):.4} s")
             
             # # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             # DT = self.t
@@ -687,18 +688,23 @@ class time_domain_solver():
         # return self.fourier_transform
 
     def get_rho_mat(self):
-        
         A0 = amin(self.n_array)
-        global x,y,yo,p1,p1o
+        global x,y,yo,p1,p1o,Ind_0,phi1,Ind,X
         if A0>0:
             return self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
         
         else:
-            X = self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
+            print("getting rhomat")
+            n_depth = 5
+            B.tic()
+            
+            Ind_0 = where(self.n_array==0)
+            
             Ind = where(self.n_array>0)
+            X = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3))
+            X[Ind] = self.phase_mat[Ind]/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))[Ind]
             y = X[Ind]
             (phi1,phi2) = self.interpolation_grid
-            
             
             p1 = phi1[Ind]
             p2 = phi2[Ind]
@@ -717,11 +723,10 @@ class time_domain_solver():
                    
                    nit += 1 
                    
-                   
             p1o,p2o,yo =[array(x) for x in [p1o,p2o,yo]]
             
                         
-            Ind = where((abs(p1o-pi)<3*pi/2)*(abs(p2o-pi)<3*pi/2))
+            Ind = where((abs(p1o-pi)<1.2*pi)*(abs(p2o-pi)<1.2*pi))
                         
             p1o =  p1o[Ind]
             p2o =  p2o[Ind]
@@ -729,12 +734,21 @@ class time_domain_solver():
             
             
             g_out = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3),dtype=float)
-            # Ind = where(self.n_array==0)
+            # Ind = where(self.n_array==0)'*
+            print("Filling out empty spaces")
+            
+            # global f            
             for d in range(0,3):
-                g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
+                
+                f = LinearNDInterpolator(array([p1o,p2o]).T,yo[:,d])
+                # X[Ind_0][:,d] = 1*f(phi1[Ind_0],phi2[Ind_0])
+                X[:,:,d] = 1*f(phi1,phi2)
+            g_out = X
+            # for d in range(0,3):
+            #     g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
             
             return g_out
-            
+            B.toc()
         
         
     def get_fourier_component(self,m,n):
@@ -779,67 +793,75 @@ class time_domain_solver():
 
 if __name__=="__main__":
     omega2 = 20*THz
-    omega1 = 0.61803398875*omega2
-    # omega1 = 1.5000* omega2 
-    tau    = 1*picosecond
-    vF     = 1e5*meter/second
+    # omega1 = 0.61803398875*omega2
+    omega1 = 1.500015* omega2 
+    tau    = 10*picosecond
+    vF     = 1e6*meter/second
     
-    EF1 = 0.6*1.25*1.2e6*Volt/meter*0.
+    EF1 = 0.6*1.25*1.2e6*Volt/meter
     EF2 = 0.6*1.5*2e6*Volt/meter
     
     T1 = 2*pi/omega1
     
-    Mu =115*0.1
+    Mu =115
     mu = Mu
-    Temp  = 20*Kelvin*0.1;
+    Temp  = 20*Kelvin;
     V0 = array([0,0,0.8*vF])
     [V0x,V0y,V0z] = V0
     parameters = 1*array([omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp])
     # set_parameters(parameters[0])
-    k= array([[ 0.1,  0       , 0      ]])
+    k= array([[0,0,0.05  ]])
     
     integration_time = 1000
-    S = time_domain_solver(k,parameters,integration_time,evolution_file="test")
     
-    
-    
-    
-    
-    
-    
-    #%%
-    # t0 = array([0])
-    # a = [(0,0),(1,2),(3,2),(4,5)]
-    # A=S.get_phase_mat()
-    B = S.get_fourier_component(0,1)
-    phi1= mod(S.sampling_phases[:,:,0].flatten(),2*pi)
-    phi2= mod(S.sampling_phases[:,:,1].flatten(),2*pi)
+    try:
+            
+        S = time_domain_solver(k,parameters,integration_time,evolution_file="test")#"test_")
+        B = S.get_fourier_component(0,1)
+    except:
+        pass
     
     from matplotlib.pyplot import *
     
+
+    
+    plot(S.sinnorm_2_cache[:,:,0])
+    
+    
+    
+   
+    # t0 = array([0])
+    # a = [(0,0),(1,2),(3,2),(4,5)]
+    # A=S.get_phase_mat()
+    phi1= mod(S.sampling_phases[:,:,0].flatten(),2*pi)
+    phi2= mod(S.sampling_phases[:,:,1].flatten(),2*pi)
+    
+    print("Plotting")
     X,Y = meshgrid(S.bin_edges,S.bin_edges)
     figure(1)
     pcolormesh(X,Y,S.n_array.T)
     ylim((0,amax(S.n_array)))
-    plot(phi1,phi2,'.w',markersize = 1)
+    plot(phi1,phi2,'.w',markersize = 0.2)
     title("Number of data points")
     xlabel("$\phi_1$")
     ylabel("$\phi_2$")
     xlim(0,2*pi)
     ylim(0,2*pi)
+    colorbar()
     figure(2)
-    pcolormesh(X,Y,S.phase_mat[:,:,0])
+    pcolormesh(X,Y,S.phase_mat[:,:,2])
     # plot(phi1,phi2,'.w',markersize = 0.1)    
     title("Accumulated data")
     xlabel("$\phi_1$")
     ylabel("$\phi_2$")
-    
+    colorbar()   
     figure(3)
-    pcolormesh(X,Y,S.phase_mat[:,:,0]/S.n_array)
+    pcolormesh(X,Y,S.phase_mat[:,:,2]/S.n_array)
     # plot(phi1,phi2,'.w',markersize = 0.4)
     title("Acc. Data/Number of data points")
     xlabel("$\phi_1$")
     ylabel("$\phi_2$")
+    colorbar()
     
     figure(4)
     pcolormesh(X,Y,S.rho_mat[:,:,2]);colorbar()

@@ -19,27 +19,31 @@ from units import *
 from data_refiner import *
 
 
-def angle_plot(angle_data,nfig=1):
+def angle_plot(angle_data,energy_angle_data,tau,nfig=1):
     (P1_phi,P2_phi,Rho_phi)=angle_data
+    (Eeq,Ess)=energy_angle_data
     Nphi = len(P1_phi)
     phivec = arange(0,2*pi,2*pi/Nphi)
     dphi = 2*pi/Nphi    
 
     figure(nfig)    
-    Dis_phi = - P1_phi-P2_phi
-    
-    Amax=max(amax(P1_phi),amax(P2_phi),amax(Dis_phi))
+    Dis_1_phi = - P1_phi-P2_phi
+    Dis_2_phi = -1/tau*(Eeq-Ess)
+    Amax=max(amax(P1_phi),amax(P2_phi),amax(Dis_1_phi),amax(Dis_2_phi))
     Rmax = amax(Rho_phi)
     
     
+    P0 = Joule/(second*micrometer**2)
     title("Contribution to pumping vs. xy angle ($\phi$)")
-    plot(phivec,P1_phi,'b.-')
-    plot(phivec,P2_phi,'r.-')
-    plot(phivec,Dis_phi,'k.-')
-    plot(phivec,Rho_phi*Amax/Rmax,'g.-')
+    plot(phivec,P1_phi/P0,'.-')
+    plot(phivec,P2_phi/P0,'.-')
+    plot(phivec,Dis_1_phi/P0,'.-')
+    plot(phivec,Dis_2_phi/P0,'.-')
+    # plot(phivec,Rho_phi*Amax/Rmax,'.-')
+        
     xlabel("$\phi$")
-    ylabel("$dP/d\phi$")
-    legend(("Mode 1","Mode 2","Dissipation"))
+    ylabel("Power, $W/\mu m^3$")
+    legend(("$dP_1/d\phi$","$dP_2/d\phi$","$-dP_1/d\phi-dP_2/d\phi$","$dP_{\\rm dis}/d\phi$"))
     
     plt = gcf()
     plt.set_size_inches(7,7)
@@ -66,8 +70,8 @@ def power_plot(Data,P0,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=No
     figure(nfig)
     title(f"Energy transfer to mode 1 vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
-    pcolormesh(rg,zg,P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(rg,zg,P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
+    pcolormesh(-rg,zg,P2[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -82,8 +86,8 @@ def power_plot(Data,P0,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=No
     figure(nfig+1)
     title(f"Energy transfer to mode 2 vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
-    pcolormesh(rg,zg,P1[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,P1[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(rg,zg,P1[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
+    pcolormesh(-rg,zg,P1[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -163,8 +167,8 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     title(f"Dissipation (computed by average energy difference to equilibrium)\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
     Diss = 1/tau*(Ess[nphi,:,:]-Eeq[nphi,:,:])/P0
-    pcolormesh(rg,zg,Diss,cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,Diss,cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(rg,zg,Diss,cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
+    pcolormesh(-rg,zg,Diss,cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -180,8 +184,8 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     figure(nfig+1)
     title(f"Work done by driving on system\nvs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
-    pcolormesh(rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
+    pcolormesh(-rg,zg,(-P1[nphi,:,:]-P2[nphi,:,:])/P0,cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -196,8 +200,8 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     figure(nfig+2)
     title("Absorbed energy (work - disspated energy) [$P_0$] \n(i.e. energy absorbed by the electrons which is not dissipated yet)",fontsize=12)
     Diff =(-( P1+P2) -1/tau * (Ess-Eeq))/P0
-    pcolormesh(rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
-    pcolormesh(-rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax)
+    pcolormesh(rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
+    pcolormesh(-rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     
     XLIM=(-0.25,0.25)
     YLIM=(-0.45,0.2)
@@ -213,8 +217,8 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     plt.set_size_inches(11,8)
     colorbar()
       
-    ND = sum(abs(Diff))*0.001**2*(pi/(2*Nphi))
-    print(f"Norm of difference between two energy absorptions: {ND:.4}")
+    # ND = sum(abs(Diff))*0.001**2*(pi/(2*Nphi))
+    # print(f"Norm of difference between two energy absorptions/(): {ND:.4}")
       
 def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     ((P1,P2,Rho),grid)=Data
@@ -232,8 +236,8 @@ def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     figure(4)
     title(f"Particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
     
-    pcolormesh(rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1)
-    pcolormesh(-rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1)
+    pcolormesh(rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1,shading="auto")
+    pcolormesh(-rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")

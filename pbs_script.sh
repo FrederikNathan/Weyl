@@ -5,7 +5,7 @@
 #PBS -e /home/frederik_nathan/Out/${PBS_JOBID%%.*}.$PBS_JOBNAME.err
 #PBS -o /home/frederik_nathan/Out/${PBS_JOBID%%.*}.$PBS_JOBNAME.out
 #PBS -l nodes=1:ppn=2
-#PBS -l mem=500mb
+#PBS -l mem=600mb
 
 
 cd $PBS_O_WORKDIR

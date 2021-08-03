@@ -9,12 +9,14 @@ Python script to execute when launching a single simulation run
 """
 import sys
 from weyl_queue import *
+import time 
+import numpy.random as npr 
 logfile = str(sys.argv[1])
 prestr = str(sys.argv[2])
 queue = str(sys.argv[3])
 serieslength=int(sys.argv[4])
 
-
+time.sleep(2*npr.rand())
 print(f"sys.argv: {sys.argv}")
 print(f"prestr : {prestr}")
 print(f"logfile: {logfile}")

@@ -27,14 +27,14 @@ v9: SO(3) implementation of time-domain solver. Using rotating frame interpolato
 In case of commensurate frequencies, we average over phase.
 """
 
-NP_MAX                 = 300 # Maximum number of photons before using time domain solver
+NP_MAX                 = 3 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
-CONVERGENCE_TRESHOLD   = 1e-8
-TMAX_IN_MODE1_PERIODS  = 500 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
+CONVERGENCE_TRESHOLD   = 1e-6
+TMAX_IN_MODE1_PERIODS  = 2000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)
 # TMAX_IN_MODE1_PERIODS  = 100 # override for testing
-SAVE_STEADYSTATE       = False
+SAVE_STEADYSTATE       = True
 
 print("WARNING: saving evolution data ")
 import os 
@@ -666,7 +666,7 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
     
     Output is just used for testing purposes -- saves autmoatically
     """
-    
+    global use_tds 
     Nk = shape(klist)[0]
     assert len(parameterlist)==Nk,"Parameterlist must be of same length as klist"
             
@@ -792,31 +792,33 @@ if __name__=="__main__":
 
 
     
-    # parameters  = fds_data["parameters"]
-    # k           = fds_data["k"]
-    omega2  = 20*THz
-    omega1  = 0.61803398875*omega2
-    # omega1  = 1.5000*omega2
-    tau     = 0.1*picosecond
-    vF      = 1e6*meter/second
-    EF2     = 0.6*1.5*2e6*Volt/meter 
-    EF1     = 0.6*1.25*1.2e6*Volt/meter  
-
+    omega2 = 20*THz
+    # omega1 = 0.61803398875*omega2
+    omega1 = 1.500015* omega2 
+    tau    = 10*picosecond
+    vF     = 1e6*meter/second
     
-    Mu      = 115
-    Temp    = 20*Kelvin*0.1;
-    V0      = array([0,0,0.8*vF])
+    EF1 = 0.6*1.25*1.2e6*Volt/meter
+    EF2 = 0.6*1.5*2e6*Volt/meter
+    
+    T1 = 2*pi/omega1
+    
+    Mu =115
+    mu = Mu
+    Temp  = 20*Kelvin;
+    V0 = array([0,0,0.8*vF])
     [V0x,V0y,V0z] = V0
+    parameters = 1*array([omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp])
+    # set_parameters(parameters[0])
+    # k= array([[0.0024023 , 0.02387947, 0.068    ]])
     
-    parameters = array([2.98881237e+00, 4.83600000e+00, 3.30851944e+03, 2.41800000e+03,
-       0.00000000e+00, 0.00000000e+00, 1.93440000e+03, 9.00000000e-02,
-       1.80000000e-01, 1.15000000e+02, 1.72400000e+00])
-    
+    # integration_time = 20
+    # TMAX_IN_MODE1_PERIODS  = 200
     
     omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = parameters
     
-    tau = 1* picosecond
-    klist= array([[ 0,  0.        ,0.09    ]])
+    # tau = 1* picosecond
+    klist= array([[  0.02631654,  0.03833653, -0.004  ]])
     parameterlist = 1*array([[omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp]])
     parameters = parameterlist[0]
     k = klist[0]
@@ -830,9 +832,53 @@ if __name__=="__main__":
     
     
 
+        #%%
+        
+    if use_tds:
+            
+        # t0 = array([0])
+        # a = [(0,0),(1,2),(3,2),(4,5)]
+        # A=S.get_phase_mat()
+        B = S_tds.get_fourier_component(0,1)
+        phi1= mod(S_tds.sampling_phases[:,:,0].flatten(),2*pi)
+        phi2= mod(S_tds.sampling_phases[:,:,1].flatten(),2*pi)
+        
+        from matplotlib.pyplot import *
+        
+        X,Y = meshgrid(S_tds.bin_edges,S_tds.bin_edges)
+        figure(1)
+        pcolormesh(X,Y,S_tds.n_array.T)
+        ylim((0,amax(S_tds.n_array)))
+        # plot(phi1,phi2,'.w',markersize = 0.2)
+        title("Number of data points")
+        xlabel("$\phi_1$")
+        ylabel("$\phi_2$")
+        xlim(0,2*pi)
+        ylim(0,2*pi)
+        colorbar()
+        figure(2)
+        pcolormesh(X,Y,S_tds.phase_mat[:,:,2])
+        # plot(phi1,phi2,'.w',markersize = 0.1)    
+        title("Accumulated data")
+        xlabel("$\phi_1$")
+        ylabel("$\phi_2$")
+        colorbar()   
+        figure(3)
+        pcolormesh(X,Y,S_tds.phase_mat[:,:,2]/S_tds.n_array)
+        # plot(phi1,phi2,'.w',markersize = 0.4)
+        title("Acc. Data/Number of data points")
+        xlabel("$\phi_1$")
+        ylabel("$\phi_2$")
+        colorbar()
+        
+        figure(4)
+        pcolormesh(X,Y,S_tds.rho_mat[:,:,0]);colorbar()
+        # plot(phi1,phi2,'.w',markersize = 0.4)
+        title("Interpolated")
+        xlabel("$\phi_1$")
+        ylabel("$\phi_2$")
     
-
-    
+        
     # # =========================================================================
     # # Simulation parameters
     # # =========================================================================
