@@ -146,9 +146,9 @@ def rotating_frame_interpolator(rotation_vector,dt_vec):
     returns \theta_1,\theta_2
     
     """
-    L = len(dt_vec)
-    rv1 = rotation_vector[:-1]*dt_vec.reshape((L,1,1))
-    rv2 = rotation_vector[1:]*dt_vec.reshape((L,1,1))
+    L,S = shape(dt_vec)
+    rv1 = rotation_vector[:-1]*dt_vec.reshape((L,S,1))
+    rv2 = rotation_vector[1:]*dt_vec.reshape((L,S,1))
     n1 = norm(rv1,axis=-1,keepdims=1)
     n2 = norm(rv2,axis=-1,keepdims=1)
     

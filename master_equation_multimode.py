@@ -29,7 +29,7 @@ In case of commensurate frequencies, we average over phase.
 
 NP_MAX                 = 3 # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
-NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
+NPHI_RGF               = 100    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
 CONVERGENCE_TRESHOLD   = 1e-6
 TMAX_IN_MODE1_PERIODS  = 2000 # Number of periods of mode 1 to integrate over net (i.e. before division into parallel runs)

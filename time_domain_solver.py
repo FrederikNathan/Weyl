@@ -21,8 +21,8 @@ NMAT_MAX         = 100
 T_RES            = 300   # time resolution that enters. 
 # print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
-PHASE_RESOLUTION = 1500  # Phase resolution of solver 
-N_RECORD         = 1000000
+PHASE_RESOLUTION = 1000  # Phase resolution of solver 
+N_RECORD         = 3000000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
@@ -97,6 +97,11 @@ class time_domain_solver():
         self.contour_initializations = self.get_initial_contour_locations()
         self.n_par,self.runs_per_contour = self.find_optimal_parallelization()
         self.tmax = self.contour_length/self.runs_per_contour
+        self.tmax = max(self.tmax,0.5*self.t_relax)
+        
+        # if self.is_commensurate:
+            # self.tmax = 2*self.tmax 
+            # 
         self.phi1_0,self.phi2_0 = self.get_initial_phases()
         self.res = self.get_res()
         self.dt  = self.T1/self.res 
@@ -406,14 +411,16 @@ class time_domain_solver():
     
         # npr.seed(int(t))
         
-        dt_cache = rand(self.N_cache+1)
-        dt_cache = cumsum(dt_cache)
-        dt_cache = dt_cache * self.N_cache*self.dt/amax(dt_cache)
+        dt_cache = rand(self.N_cache+1,self.n_par)
+        dt_cache = cumsum(dt_cache,axis =0)
+        dt_cache = dt_cache * self.N_cache*self.dt/amax(dt_cache,axis=0)
         # self.t_cache = self.t + arange(self.N_cache+1)*self.dt
         self.t_cache = self.t + dt_cache 
+        del dt_cache
+        
         self.dt_cache = self.t_cache[1:]-self.t_cache[:-1]
-        self.phi1_cache = self.phi1_0.reshape(1,self.n_par) + self.t_cache.reshape((self.N_cache+1,1)) * self.omega1 
-        self.phi2_cache = self.phi2_0.reshape(1,self.n_par) + self.t_cache.reshape((self.N_cache+1,1)) * self.omega2 
+        self.phi1_cache = self.phi1_0.reshape(1,self.n_par) + self.t_cache * self.omega1 
+        self.phi2_cache = self.phi2_0.reshape(1,self.n_par) + self.t_cache * self.omega2 
         
         # self.k_cache =   swapaxes(wl.get_A(self.omega1*(self.t_cache),self.omega2*(self.t_cache)).T,0,1)+self.k 
         self.k_cache =   swapaxes(wl.get_A(self.phi1_cache.T,self.phi2_cache.T),0,2)+self.k.reshape((1,1,3))
@@ -462,6 +469,21 @@ class time_domain_solver():
         self.rvd_1= self.rvd_1_cache[self.ns_cache]
         self.rvd_2= self.rvd_2_cache[self.ns_cache]
 
+
+        dtvec = self.dt_cache[self.ns_cache].reshape((self.n_par,1))
+        # Compute rho_1 (used as an intermediate step in computation of steady state)
+        self.rho_1   = self.rho*exp(-dtvec/self.tau)+0.5*(1-exp(-dtvec/self.tau))*(self.rhoeq1)
+        # self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
+
+ 
+        # Update rho
+        # self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
+
+        self.rho   = so3.efficient_rotate(self.rvd_2, self.cosnorm_2, self.sinnorm_2,so3.efficient_rotate(self.rvd_1,self.cosnorm_1,self.sinnorm_1,self.rho_1))
+        
+        self.rho   += 0.5*(1-exp(-dtvec/self.tau))*self.rhoeq2
+        # self.rho   += self.tau_factor_2*self.rhoeq2
+
         # Update time, iteration step, and cache index
         self.t   += self.dt
         self.ns  += 1
@@ -472,21 +494,6 @@ class time_domain_solver():
         if self.ns_cache==self.N_cache:
             self.ns_cache=0
             self.generate_cache()
-
-
-        # Compute rho_1 (used as an intermediate step in computation of steady state)
-        # self.rho_1   = self.rho*exp(-self.dt/self.tau)+0.5*(1-exp(-self.dt/self.tau))*(self.rhoeq1)
-        self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
-
- 
-        # Update rho
-        # self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
-
-        self.rho   = so3.efficient_rotate(self.rvd_2, self.cosnorm_2, self.sinnorm_2,so3.efficient_rotate(self.rvd_1,self.cosnorm_1,self.sinnorm_1,self.rho_1))
-        
-        # self.rho   += 0.5*(1-exp(-self.dt/self.tau))*self.rhoeq2
-        self.rho   += self.tau_factor_2*self.rhoeq2
-
 
     def initialize_steady_state(self):
         """
@@ -795,7 +802,7 @@ if __name__=="__main__":
     omega2 = 20*THz
     # omega1 = 0.61803398875*omega2
     omega1 = 1.500015* omega2 
-    tau    = 10*picosecond
+    tau    = 1*picosecond
     vF     = 1e6*meter/second
     
     EF1 = 0.6*1.25*1.2e6*Volt/meter
@@ -827,7 +834,7 @@ if __name__=="__main__":
     
     plot(S.sinnorm_2_cache[:,:,0])
     
-    
+    #%%
     
    
     # t0 = array([0])
