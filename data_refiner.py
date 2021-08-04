@@ -101,15 +101,19 @@ def load_archive(update=True):
 
 
 def update_archive():
-    
-    FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Esslist,Eeqlist,TDSlist = load_archive(update=False)        
+        
+    FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist = load_archive(update=False)        
     nf = 0
-    global D
+
+    NP0 = 0
+    
+    B.tic()
     for file in Files:
         nf+=1 
         
-        if nf%5000==0:
-            print(f"At file {nf}/{len(Files)}")
+        if nf%5==0:
+            print(f"At file {nf}/{len(Files)}.\n    Parameter sets recorded: {NP0} \n    Time spent: {B.toc(disp=False):.4} s")
+            # print(f"    ")
         try:
                 
             if file[-4:] == ".npz":

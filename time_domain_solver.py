@@ -15,14 +15,14 @@ v9: using SO(3) representation. Using rotating frame interpolator
 In case of commensurate frequencies, we average over phase. 
 """
  
-T_RELAX          = 12 # time-interval used for relaxing to steady state, in units of tau.
+T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 100
 T_RES            = 300   # time resolution that enters. 
 # print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
-CACHE_ELEMENTS   = 1e6  # Number of entries in cached quantities
+CACHE_ELEMENTS   = 1e5  # Number of entries in cached quantities
 PHASE_RESOLUTION = 1000  # Phase resolution of solver 
-N_RECORD         = 3000000
+N_RECORD         = 1000000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
 
 import os 
@@ -97,7 +97,7 @@ class time_domain_solver():
         self.contour_initializations = self.get_initial_contour_locations()
         self.n_par,self.runs_per_contour = self.find_optimal_parallelization()
         self.tmax = self.contour_length/self.runs_per_contour
-        self.tmax = max(self.tmax,0.5*self.t_relax)
+        self.tmax = max(self.tmax,4*NMAT_MAX*self.n_contours/T_RES*self.T1,0.12*self.t_relax)
         
         # if self.is_commensurate:
             # self.tmax = 2*self.tmax 
@@ -411,7 +411,7 @@ class time_domain_solver():
     
         # npr.seed(int(t))
         
-        dt_cache = rand(self.N_cache+1,self.n_par)
+        dt_cache = 1+rand(self.N_cache+1,self.n_par)
         dt_cache = cumsum(dt_cache,axis =0)
         dt_cache = dt_cache * self.N_cache*self.dt/amax(dt_cache,axis=0)
         # self.t_cache = self.t + arange(self.N_cache+1)*self.dt
@@ -438,13 +438,18 @@ class time_domain_solver():
         self.cosnorm_2_cache = cos(theta_2_norm)
         self.sinnorm_1_cache = sin(theta_1_norm)
         self.sinnorm_2_cache = sin(theta_2_norm)
+        
         self.rvd_1_cache = theta_1_cache/theta_1_norm
         self.rvd_2_cache = theta_2_cache/theta_2_norm
         # Counter measuringh how far in the cache we are (?)
         self.ns_cache = 0
         
+        del theta_1_norm,theta_2_norm
         # raise ValueError 
         
+        
+        self.tau_exp_cache = exp(-self.dt_cache/self.tau).reshape((self.N_cache,self.n_par,1))
+        self.tau_factor_2_cache = 0.5*(1-exp(-self.dt_cache/self.tau)).reshape((self.N_cache,self.n_par,1))
     def evolve(self):    
         """ 
         Main iteration.
@@ -462,27 +467,27 @@ class time_domain_solver():
         self.rhoeq1  = self.rhoeq_cache[self.ns_cache]
         self.rhoeq2 = self.rhoeq_cache[self.ns_cache+1]
         
-        self.cosnorm_1= self.cosnorm_1_cache[self.ns_cache]
-        self.cosnorm_2= self.cosnorm_2_cache[self.ns_cache]
-        self.sinnorm_1= self.sinnorm_1_cache[self.ns_cache]
-        self.sinnorm_2= self.sinnorm_2_cache[self.ns_cache]
-        self.rvd_1= self.rvd_1_cache[self.ns_cache]
-        self.rvd_2= self.rvd_2_cache[self.ns_cache]
+        cosnorm_1= self.cosnorm_1_cache[self.ns_cache]
+        cosnorm_2= self.cosnorm_2_cache[self.ns_cache]
+        sinnorm_1= self.sinnorm_1_cache[self.ns_cache]
+        sinnorm_2= self.sinnorm_2_cache[self.ns_cache]
+        rvd_1= self.rvd_1_cache[self.ns_cache]
+        rvd_2= self.rvd_2_cache[self.ns_cache]
 
 
-        dtvec = self.dt_cache[self.ns_cache].reshape((self.n_par,1))
+        # dtvec = self.dt_cache[self.ns_cache].reshape((self.n_par,1))
         # Compute rho_1 (used as an intermediate step in computation of steady state)
-        self.rho_1   = self.rho*exp(-dtvec/self.tau)+0.5*(1-exp(-dtvec/self.tau))*(self.rhoeq1)
+        self.rho_1   = self.rho*self.tau_exp_cache[self.ns_cache]+self.tau_factor_2_cache[self.ns_cache]*(self.rhoeq1)
         # self.rho_1   = self.rho*self.tau_exp+self.tau_factor_2*self.rhoeq1
 
  
         # Update rho
         # self.rho   = so3.rotate(self.theta_2,so3.rotate(self.theta_1,self.rho_1))
 
-        self.rho   = so3.efficient_rotate(self.rvd_2, self.cosnorm_2, self.sinnorm_2,so3.efficient_rotate(self.rvd_1,self.cosnorm_1,self.sinnorm_1,self.rho_1))
+        self.rho   = so3.efficient_rotate(rvd_2, cosnorm_2, sinnorm_2,so3.efficient_rotate(rvd_1,cosnorm_1,sinnorm_1,self.rho_1))
         
-        self.rho   += 0.5*(1-exp(-dtvec/self.tau))*self.rhoeq2
-        # self.rho   += self.tau_factor_2*self.rhoeq2
+        # self.rho   += 0.5*(1-exp(-dtvec/self.tau))*self.rhoeq2
+        self.rho   += self.tau_factor_2_cache[self.ns_cache]*self.rhoeq2
 
         # Update time, iteration step, and cache index
         self.t   += self.dt
@@ -548,7 +553,6 @@ class time_domain_solver():
         """
         # print("")
         # print("Recording")
-        B.tic()
         # global cumulated_data
         phi1_out = mod(self.phi1_list[:self.n_record,:],2*pi).flatten()
         phi2_out = mod(self.phi2_list[:self.n_record,:],2*pi).flatten()
@@ -564,18 +568,23 @@ class time_domain_solver():
         
         Ind = where(self.H>0)
         
-        for d in range(0,3):
-            rho_out = self.rho_list[:self.n_record,:,d].flatten()
+        # for d in range(0,3):
+        #     rho_out = self.rho_list[:self.n_record,:,d].flatten()
             
    
-            cumulated_data = griddata((phi1_out,phi2_out),rho_out,self.interpolation_grid,method="nearest",fill_value = nan)
+        #     cumulated_data = griddata((phi1_out,phi2_out),rho_out,self.interpolation_grid,method="nearest",fill_value = nan)
             
-            self.phase_mat[:,:,d]+= 1*cumulated_data*self.H
+        #     self.phase_mat[:,:,d]+= 1*cumulated_data*self.H
+        # for d in range(0,3):
+        rho_out = self.rho_list[:self.n_record,:,:].reshape((len(phi1_out),3))
             
+   
+        cumulated_data = griddata((phi1_out,phi2_out),rho_out,self.interpolation_grid,method="nearest",fill_value = nan)
+            
+        self.phase_mat[:,:,:]+= 1*cumulated_data*self.H.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))          
         
         self.n_record = 0
         
-        B.toc()
             
         
         
@@ -652,9 +661,9 @@ class time_domain_solver():
             self.n_record += 1 
             
             if self.n_record % self.N_record == 0:
-                print("Recording");B.tic(n=68)
+                print(f"        recording");B.tic(n=68)
                 self.record()
-                print(f"Time spent: {B.toc(n=68,disp=False):.4} s")
+                print(f"        time spent: {B.toc(n=68,disp=False):.4} s")
             
             # # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             # DT = self.t
@@ -675,10 +684,10 @@ class time_domain_solver():
                 sys.stdout.flush()
                 self.counter+=1 
         
-        self.record()
-        self.rho_mat = self.get_rho_mat()
         print(f"done. Time spent: {B.toc(n=11,disp=0):.4}s")
         print("")
+        self.record()
+        self.rho_mat = self.get_rho_mat()
         
         
         
@@ -701,7 +710,7 @@ class time_domain_solver():
             return self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
         
         else:
-            print("getting rhomat")
+            print("Interpolating Bloch vector")
             n_depth = 5
             B.tic()
             
@@ -742,20 +751,20 @@ class time_domain_solver():
             
             g_out = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3),dtype=float)
             # Ind = where(self.n_array==0)'*
-            print("Filling out empty spaces")
             
             # global f            
-            for d in range(0,3):
+            # for d in range(0,3):
                 
-                f = LinearNDInterpolator(array([p1o,p2o]).T,yo[:,d])
-                # X[Ind_0][:,d] = 1*f(phi1[Ind_0],phi2[Ind_0])
-                X[:,:,d] = 1*f(phi1,phi2)
+            f = LinearNDInterpolator(array([p1o,p2o]).T,yo)
+            # X[Ind_0][:,d] = 1*f(phi1[Ind_0],phi2[Ind_0])
+            X = 1*f(phi1,phi2)
+
             g_out = X
             # for d in range(0,3):
             #     g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
             
             return g_out
-            B.toc()
+            print(f"done. Time spent: {B.toc(disp=0):.4}s")
         
         
     def get_fourier_component(self,m,n):
@@ -821,12 +830,12 @@ if __name__=="__main__":
     
     integration_time = 1000
     
-    try:
+    # try:
             
-        S = time_domain_solver(k,parameters,integration_time,evolution_file="test")#"test_")
-        B = S.get_fourier_component(0,1)
-    except:
-        pass
+    S = time_domain_solver(k,parameters,integration_time,evolution_file="test")#"test_")
+    B = S.get_fourier_component(0,1)
+    # except:
+    #     pass
     
     from matplotlib.pyplot import *
     

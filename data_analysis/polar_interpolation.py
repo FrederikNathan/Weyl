@@ -36,6 +36,7 @@ e_sd,e_ad,e_d2d,e_nlist = DR.compute_energy(klist,Eeq,Ess,phi_res=phi_res)
 (E_eq,E_ss) = e_sd
 Diss = 1/tau * (E_ss-E_eq)
 
+# Diss = abs(Diss)
 vmax_energy = 1
 PL.angle_plot(angle_data,e_ad,tau)
 PL.power_plot(data_2d,P0,angle=angle,nfig=20,vmax=1.)
@@ -49,10 +50,10 @@ PL.data_point_plot(klist,TDS,angle,dphi=pi/(2*phi_res),nfig=50)
 print("-"*80)
 # print("")
 # 
-print(f"Dissipation        : {Diss/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
-print(f"Unaccounted energy : {(Diss-P1[0]-P2[0])/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
+print(f"Dissipation         : {Diss/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
+print(f"Work - dissipation  : {(-Diss-P1[0]-P2[0])/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
 print("-"*80)
 # (P1,P2),(std1,std2),rho,tw,parameters = DR.power_sweep([n0])
 # print("") 
-print(f"Conversion power   : {P1[0]/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2 (+/- {abs(std1[0]/P1[0])*100:.0}%)")#/(Joule/second/(micrometer**3)):>0.4} W/micrometer^2")
+print(f"Conversion power    : {P1[0]/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2 (+/- {around(abs(std1[0]/P1[0])*100,1)}%)")#/(Joule/second/(micrometer**3)):>0.4} W/micrometer^2")
 print("="*80)

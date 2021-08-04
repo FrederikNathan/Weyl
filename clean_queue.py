@@ -15,7 +15,7 @@ from numpy import *
 import numpy.random as npr
 import scipy.optimize as optimize
 import basic as B
-from Units import * 
+from units import * 
 import sys 
 QueueDir = "../Queues/"
 
