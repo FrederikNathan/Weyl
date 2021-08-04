@@ -1,51 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Script to launch a weyl sweep. 
+"""
 
-
-import weyl_queue as Q
-import socket
 import sys
+import os
+import weyl_queue as Q
+#import basic as B
 
-#try:
+# Test if just launching here. 
+if len(sys.argv)<2:
+    Queue="../Queues/test_ca.npz"
+    N_runs = 4
+    Serieslength = 5
+else:
         
-Queue = sys.argv[1]
-N_parallel = int(sys.argv[2])
-Serieslength = int(sys.argv[3])
-
-#except:
-#    pass
-
-HN = socket.gethostname()
+    Queue = sys.argv[1]
+    N_runs = int(sys.argv[2])
+    Serieslength = int(sys.argv[3])
     
-HN_mac = "Frederiks-MacBook-Pro-2.local";
-HN_wa = 'wakanda'
-HN_yu = "yukawa"
-HM_ca = "cmtrack2.caltech.edu"
+
+Q.nbi_launch(Queue,N_runs,Serieslength)
 
 
-#if HN == HN_mac or HN==HN_wa or HN ==HN_yu:
-hour = 3600
-day = 24*hour
-week = 7*day
-
-    
-live_time = 1*week
-
-Q.wakanda_launch(Queue,N_parallel,Serieslength,TimeOut = 1*week)
-
-
-#else:
-#    raise SystemError("Host not recognized")    
-#
-#    
-
-
-
-
-
-
-
-
-
-
-
+#script  = "pbs_script.sh"
+#argstring = f"LF={logfile},PRESTR='{prestr}',Q={Queue},SL={Serieslength}"
+#qsub_str=f'qsub -N {job_name} -l walltime={Tmax_h}:{Tmax_m}:{Tmax_s} -v {argstring} {script} &'
+#os.system(qsub_str)
+#time.sleep(0.2*(1+npr.rand()))
+        

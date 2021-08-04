@@ -809,8 +809,8 @@ class time_domain_solver():
 
 if __name__=="__main__":
     omega2 = 20*THz
-    # omega1 = 0.61803398875*omega2
-    omega1 = 1.500015* omega2 
+    omega1 = 1.61803398875*omega2
+    # omega1 = 1.500015* omega2 
     tau    = 1*picosecond
     vF     = 1e6*meter/second
     
@@ -828,7 +828,7 @@ if __name__=="__main__":
     # set_parameters(parameters[0])
     k= array([[0,0,0.05  ]])
     
-    integration_time = 1000
+    integration_time = 4000
     
     # try:
             
@@ -880,7 +880,7 @@ if __name__=="__main__":
     colorbar()
     
     figure(4)
-    pcolormesh(X,Y,S.rho_mat[:,:,2]);colorbar()
+    pcolormesh(X,Y,S.rho_mat[:,:,0]);colorbar()
     # plot(phi1,phi2,'.w',markersize = 0.4)
     title("Interpolated")
     xlabel("$\phi_1$")

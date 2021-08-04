@@ -376,9 +376,10 @@ def caltech_launch(Queue,N_runs,Serieslength):
         os.system(qsub_str)
         time.sleep(0.2*(1+npr.rand()))
 
-
-  
-def slurm_launch(Queue,N_runs,Serieslength):
+def nbi_launch(Queue,N_runs,Serieslength):
+    """
+    Launch a sweep on the nbi cluster with N_runs of Series-length k-points each
+    """
     Ndp = int(N_runs*Serieslength+1)
     ID_series = B.ID_gen()[:11]    
     
@@ -390,9 +391,6 @@ def slurm_launch(Queue,N_runs,Serieslength):
     Tmax_s = int(Tmax % 60+1)
     Tmax_m = int(Tmax/60 + 5)%60
     Tmax_h = int(Tmax/3600)
-    
-    #Tmax_m = Tmax_0 + 30
-    
     
     def fz(x):
         st = str(x)
@@ -407,8 +405,6 @@ def slurm_launch(Queue,N_runs,Serieslength):
     nodestr = "nodes=1:ppn=1"
     walltime_str = f"{fz(Tmax_h)}:{fz(Tmax_m)}:{fz(Tmax_s)}"
     
-#    resource_str=f"{mem_str},{nodestr},{timestr}"
-    
     outdir = "/home/frederik_nathan/out/"
         
     strlist=[]
@@ -420,18 +416,45 @@ def slurm_launch(Queue,N_runs,Serieslength):
         logfile = get_logfile(Queue)
         
         job_name = ID0+"_"+str(n)
-        output_path = outdir+job_name+".out"
-        err_path    = outdir+job_name+".err"
+        out_path = "~/jobs/"+job_name+".output"
+        # output_path = outdir+job_name+".out"
+        # err_path    = outdir+job_name+".err"
 
-        script  = "pbs_script.sh"
-        argstring = f"LF={logfile},PRESTR='{prestr}',Q={Queue},SL={Serieslength}"
-        qsub_str=f'qsub -N {job_name} -l walltime={Tmax_h}:{Tmax_m}:{Tmax_s} -v {argstring} {script} &'
+
+        job_name = ID0+"_"+str(n)
+        out_path = "../slurm_logs/"+job_name+".log"
+                                                                                                                                                                                                                                                                                                                                                                                   
+        script    = "slurm_script.sh"
+        qsub_str  = f'sbatch --job-name={job_name} -o{out_path} --error={out_path} -t{Tmax_h}:{Tmax_m}:{Tmax_s} '
+        qsub_str += f'--mem=600mb --nodes=1 --tasks-per-node=1 --cpus-per-task=2 '
+        qsub_str += f'--export LF={logfile},PRESTR="{prestr}",Q={Queue},SL={Serieslength} '
+        qsub_str += f'slurm_script.sh &'
         os.system(qsub_str)
-        time.sleep(0.2*(1+npr.rand()))
-#        e=03:33:33
-#        os.system(f"./{script} {argstring}")
-#        print(qsub_str)
-#        strlist.append(qsub_str)
-        
-#    return strlist
+        time.sleep(8*(1+npr.rand()))
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # "--export=LF={logfile},PRESTR="{prestr}"'',Q={Queue},SL={Serieslength}
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
 
