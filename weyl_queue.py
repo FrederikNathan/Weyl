@@ -426,7 +426,7 @@ def nbi_launch(Queue,N_runs,Serieslength):
                                                                                                                                                                                                                                                                                                                                                                                    
         script    = "slurm_script.sh"
         qsub_str  = f'sbatch --job-name={job_name} -o{out_path} --error={out_path} -t{Tmax_h}:{Tmax_m}:{Tmax_s} '
-        qsub_str += f'--mem=600mb --nodes=1 --tasks-per-node=1 --cpus-per-task=2 '
+        qsub_str += f'--mem=700mb --nodes=1 --tasks-per-node=1 --cpus-per-task=2 '
         qsub_str += f'--export LF={logfile},PRESTR="{prestr}",Q={Queue},SL={Serieslength} '
         qsub_str += f'slurm_script.sh &'
         os.system(qsub_str)

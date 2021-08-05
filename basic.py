@@ -61,6 +61,26 @@ def tic(n=None):
     else:
         tic_list[n]=get_ct()
     
+def mod_center(x,y):
+    """
+    Return x mod y, with output in interval [-y/2,y/2)
+
+    Parameters
+    ----------
+    x : TYPE
+        DESCRIPTION.
+    y : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    mod_center : TYPE
+        DESCRIPTION.
+
+    """
+    mod_center = mod(x+y/2,y)-y/2
+    return mod_center
+
 def toc(n=None,disp=True):
     
     if n == None:

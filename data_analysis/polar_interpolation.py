@@ -21,7 +21,7 @@ import data_interpolation as DR
 import data_plotting as PL
     
   
-n0=165
+n0=161
 angle=0.01
 # angle = 0
 phi_res = 12
@@ -50,10 +50,10 @@ PL.data_point_plot(klist,TDS,angle,dphi=pi/(2*phi_res),nfig=50)
 print("-"*80)
 # print("")
 # 
-print(f"Dissipation         : {Diss/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
-print(f"Work - dissipation  : {(-Diss-P1[0]-P2[0])/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
+print(f"Dissipation             : {Diss/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2")
+print(f"Work - dissipation (%)  : {around((-Diss-P1[0]-P2[0])/abs(Diss)*100,2):>10}%")
 print("-"*80)
 # (P1,P2),(std1,std2),rho,tw,parameters = DR.power_sweep([n0])
 # print("") 
-print(f"Conversion power    : {P1[0]/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2 (+/- {around(abs(std1[0]/P1[0])*100,1)}%)")#/(Joule/second/(micrometer**3)):>0.4} W/micrometer^2")
+print(f"Conversion power        : {P2[0]/(Joule/second/(micrometer**3)):>10.4} W/micrometer^2 (+/- {around(abs(std2[0]/P2[0])*100,1)}%)")#/(Joule/second/(micrometer**3)):>0.4} W/micrometer^2")
 print("="*80)

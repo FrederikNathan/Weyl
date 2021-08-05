@@ -56,6 +56,11 @@ ArchivePath_sc = "../Processed/Archive_sc.npz"
 DataDir = "../Data/"
 Files = os.listdir(DataDir)
 
+Times  = array([int(X[-22:-16]+X[-15:-11]) for X in Files])
+AS = argsort(Times)
+Files = list(array(Files)[AS])
+Times = Times[AS]
+
 ### TDS = 0: using RGF solver, TDS=1: using time domain solver; TDS = 2: not known
 def load_archive(update=True):
     if update:
@@ -75,6 +80,7 @@ def load_archive(update=True):
         Esslist = Archive["Esslist"]
         Eeqlist = Archive["Eeqlist"]
         TDSlist = Archive["TDSlist"]
+        DateList = Archive["DateList"]
 #            Convlist = Archive["Convlist"]
 #            Crlist=  Archive["Crlist"]
     except FileNotFoundError:
@@ -89,10 +95,11 @@ def load_archive(update=True):
         Esslist = zeros(0)
         Eeqlist = zeros(0)
         TDSlist = zeros(0,dtype=int)
+        DateList = zeros(0,dtype=int)
         #            Convlist=zeros((0,2),dtype=int)
 #            Crlist = zeros(0)
 
-    return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
+    return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist,DateList
 
     # else:
     #     return update_archive()
@@ -102,24 +109,26 @@ def load_archive(update=True):
 
 def update_archive():
         
-    FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist = load_archive(update=False)        
+    FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist,DateList = load_archive(update=False)        
     nf = 0
 
     NP0 = 0
     
     B.tic()
     for file in Files:
-        nf+=1 
         
+        
+        nf+=1 
         if nf%5==0:
             print(f"At file {nf}/{len(Files)}.\n    Parameter sets recorded: {NP0} \n    Time spent: {B.toc(disp=False):.4} s")
             # print(f"    ")
         try:
                 
             if file[-4:] == ".npz":
+                
+                
                 if not file in FileList:
                     FileList.append(file)
-                    
                     D = load(DataDir+file)
                     
                     K = D["klist"]
@@ -131,6 +140,12 @@ def update_archive():
                     Ess = D["Ess_list"]
                     Eeq = D["Eeq_list"]
                     
+                    Date = int(file[-22:-16]+file[-15:-11])
+                    
+                    NP1 = shape(Parameters)[0]
+
+                    Date_array = ones((NP1),dtype=int)*Date
+                    
                     try:
                         TDS = D["use_tds_list"]*1
                     except KeyError:
@@ -141,7 +156,6 @@ def update_archive():
     #                Conv = D["convlist"]
     #                Cr = D["crlist"]
                     
-                    NP1 = shape(Parameters)[0]
                     if shape(ParameterList)[0]==0:
                         ParameterList=Parameters[0,:].reshape((1,11))           
     
@@ -174,6 +188,7 @@ def update_archive():
                     Esslist =  concatenate((Esslist,Ess))
                     
                     TDSlist = concatenate((TDSlist,TDS))
+                    DateList = concatenate((DateList,Date_array))
     #                Convlist = concatenate((Convlist,Conv))
     #                Crlist=concatenate((Crlist,Cr))
                 
@@ -200,10 +215,10 @@ def update_archive():
         
 
     savez(ArchivePath,FileList=FileList,ParameterList=ParameterList,PPointList=PPointList,klist=klist,P1list=P1list,P2list=P2list,Nlist=Nlist,NDP=NDP,Eeqlist=Eeqlist,Esslist=Esslist,
-          TDSlist=TDSlist)
+          TDSlist=TDSlist,DateList=DateList)
     
     savez(ArchivePath_sc,FileList=FileList,ParameterList=ParameterList,PPointList=PPointList,klist=klist,P1list=P1list,P2list=P2list,Nlist=Nlist,NDP=NDP,Eeqlist=Eeqlist,Esslist=Esslist,
-          TDSlist=TDSlist)
+          TDSlist=TDSlist,DateList=DateList)
     
                 
     # return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
@@ -220,18 +235,21 @@ def update_archive():
 
 def parameterprint(n):
     omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = pl[n,:]
-    
+    # first_date,last_date = get_dates(n)
 
     print("-"*80)
-    print(f"    omega_1  :  {omega1/THz:<8.4} THz")
-    print(f"    omega_2  :  {omega2/THz:<8.4} THz\n")
-    print(f"    tau      :  {tau/picosecond:<8.4} ps\n")
-    print(f"    vF       :  {vF/(meter/second):<8.4} m/s")
-    print(f"    v0       :  {V0z/(meter/second):<8.4} m/s\n")
-    print(f"    E1       :  {EF1/(Volt/meter):<8.4} V/m")
-    print(f"    E2       :  {EF2/(Volt/meter):<8.4} V/m\n")
-    print(f"    mu       :  {Mu/meV:<8.4} meV")
-    print(f"    Temp     :  {Temp/Kelvin:<8.4} K")
+    print(f"    omega_1            :  {omega1/THz:<8.4} THz")
+    print(f"    omega_2            :  {omega2/THz:<8.4} THz")
+    print(f"    ratio              :  {omega2/omega1:<8.9}\n")
+    print(f"    tau                :  {tau/picosecond:<8.4} ps\n")
+    print(f"    vF                 :  {vF/(meter/second):<8.4} m/s")
+    print(f"    v0                 :  {V0z/(meter/second):<8.4} m/s\n")
+    print(f"    E1                 :  {EF1/(Volt/meter):<8.4} V/m")
+    print(f"    E2                 :  {EF2/(Volt/meter):<8.4} V/m\n")
+    print(f"    mu                 :  {Mu/meV:<8.4} meV")
+    print(f"    Temp               :  {Temp/Kelvin:<8.4} K\n")
+    # print("-"*80)
+
 #    print(f"    Npmax    :  {NPmax}")
 
 
@@ -239,7 +257,7 @@ def parameterprint(n):
 
     
 print("Loading files")
-FileList,pl,pp,kl,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist = load_archive(update=False)    
+FileList,pl,pp,kl,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist,DateList = load_archive(update=False)    
 NPARMS = len(NDP)
 print("   done.\n")
     
@@ -247,23 +265,73 @@ print("   done.\n")
 def print_parameters():
     N = shape(pl)[0]
     for n in range(0,N):
-        
+        first_dstr,last_dstr = [format_datestr(x) for x in get_dates(n)]
+
         print("="*80)
         print(f"   Parameter set {n}       {NDP[n]}   data points")
+        print("-"*80)
+        print(f"    First run          :  {first_dstr}  ")
+        print(f"    Last  run          :  {last_dstr} ")
+        print("")
         parameterprint(n)
         print("")
         
+
+def format_datestr(datestr):
+    year = datestr[:2]
+    month = datestr[2:4]
+    day   = datestr[4:6]
+    hour  = datestr[6:8]
+    minute = datestr[8:10]
    
+    outstr = f"{day}/{month} 20{year} {hour}:{minute}"
+    return outstr
+
+def get_dates(n):
+    """
+    Get first and last date of data in set n
+
+    Parameters
+    ----------
+    n : int
+        Index of parameter set.
+
+    Returns
+    -------
+    first_date : int
+        Date and time for first run in parameter set.
+    last_date : int
+        Date and time for last run in parameter set.
+
+    """
+    Ind = where(pp==n)[0]
+    
+    Dates = DateList[Ind]
+    first_date = str(amin(Dates))
+    last_date  = str(amax(Dates))
+    
+    # date_first = format_datestr(first_date)
+    # date_last  = format_datestr(last_date)    
+
+    return first_date,last_date
     
 def pprint(n=None):
     if n==None:
         
         print_parameters()
     else:
+        first_dstr,last_dstr = [format_datestr(x) for x in get_dates(n)]
         print("="*80)
-        print(f"   Parameter set {n}       {NDP[n]}   data points")
+        print(f"   Parameter set {n}        {NDP[n]}   data points")
+        # print("")
+
+        # print("")
+
         parameterprint(n)
-        print("\n"+"-"*80)
+        print("-"*80)
+        print(f"    First run          :  {first_dstr}  ")
+        print(f"    Last run           :  {last_dstr} ")
+        print("-"*80)
         
 def get_data(n,disp=True):
     parameters = pl[n,:]
@@ -286,6 +354,8 @@ def get_data(n,disp=True):
 #        print("-"*80)
     return parameters,k_out,P1_out,P2_out,N_out,Eeq,Ess,TDS
     
+
+pprint(n=7)
     
     
     

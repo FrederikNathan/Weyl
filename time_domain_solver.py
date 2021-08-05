@@ -22,18 +22,20 @@ T_RES            = 300   # time resolution that enters.
 # print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e5  # Number of entries in cached quantities
 PHASE_RESOLUTION = 1000  # Phase resolution of solver 
-N_RECORD         = 1000000
+N_RECORD         = 500000
 # N_CONTOURS       = 200 # NUMBER Of contours in the phase brillouin zone 
+GRID_DIVISION = 5
 
+assert PHASE_RESOLUTION%GRID_DIVISION==0,"GRID_DIVISION must be divisor of PHASE_RESOLUTION"
+          
 import os 
 from scipy import *
 import sys 
-from scipy.interpolate import griddata,LinearNDInterpolator
-
+from scipy.interpolate import griddata,LinearNDInterpolator,NearestNDInterpolator
+import gc 
 from units import *
 import weyl_liouvillian as wl
 import so3 as so3
-
 I3 = eye(3)
 
 # Levi civita tensor
@@ -438,7 +440,7 @@ class time_domain_solver():
         self.cosnorm_2_cache = cos(theta_2_norm)
         self.sinnorm_1_cache = sin(theta_1_norm)
         self.sinnorm_2_cache = sin(theta_2_norm)
-        
+        print_memory_usage()
         self.rvd_1_cache = theta_1_cache/theta_1_norm
         self.rvd_2_cache = theta_2_cache/theta_2_norm
         # Counter measuringh how far in the cache we are (?)
@@ -450,6 +452,9 @@ class time_domain_solver():
         
         self.tau_exp_cache = exp(-self.dt_cache/self.tau).reshape((self.N_cache,self.n_par,1))
         self.tau_factor_2_cache = 0.5*(1-exp(-self.dt_cache/self.tau)).reshape((self.N_cache,self.n_par,1))
+        
+        gc.collect()
+
     def evolve(self):    
         """ 
         Main iteration.
@@ -536,6 +541,8 @@ class time_domain_solver():
             self.ns_ss +=1 
             if self.ns_ss % (NS//10)==0:
                 print(f"    progress: {-int(self.ns_ss/NS*100)} %. Time spent: {B.toc(n=18,disp=False):.4} s")
+                print_memory_usage()
+
                 sys.stdout.flush()
         
         
@@ -556,17 +563,20 @@ class time_domain_solver():
         # global cumulated_data
         phi1_out = mod(self.phi1_list[:self.n_record,:],2*pi).flatten()
         phi2_out = mod(self.phi2_list[:self.n_record,:],2*pi).flatten()
+
+        # phi1_out = mod(self.phi1_cache[:self.n_record,:],2*pi).flatten()
+        # phi2_out = mod(self.phi2_cache[:self.n_record,:],2*pi).flatten()
         
         # assert amax(phi1_out)<2*pi
         # assert amax(phi2_out)<2*pi
         
         # bin_edges = arange(0,PHASE_RESOLUTION+1)/PHASE_RESOLUTION * 2*pi
         
-        self.H = (0.5+histogram2d(phi1_out,phi2_out,self.bin_edges)[0]).astype(int)
+        H = (0.5+histogram2d(phi1_out,phi2_out,self.bin_edges)[0]).astype(int)
         
-        self.n_array += self.H
+        self.n_array += H
         
-        Ind = where(self.H>0)
+        Ind = where(H>0)
         
         # for d in range(0,3):
         #     rho_out = self.rho_list[:self.n_record,:,d].flatten()
@@ -578,15 +588,16 @@ class time_domain_solver():
         # for d in range(0,3):
         rho_out = self.rho_list[:self.n_record,:,:].reshape((len(phi1_out),3))
             
-   
+        print_memory_usage()
         cumulated_data = griddata((phi1_out,phi2_out),rho_out,self.interpolation_grid,method="nearest",fill_value = nan)
-            
-        self.phase_mat[:,:,:]+= 1*cumulated_data*self.H.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))          
+        print_memory_usage()
+        self.phase_mat[:,:,:]+= 1*cumulated_data*H.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))          
         
         self.n_record = 0
         
-            
-        
+        print_memory_usage()
+        del cumulated_data,H,rho_out,phi1_out,phi2_out
+        gc.collect()
         
         
     def solve(self):
@@ -664,7 +675,6 @@ class time_domain_solver():
                 print(f"        recording");B.tic(n=68)
                 self.record()
                 print(f"        time spent: {B.toc(n=68,disp=False):.4} s")
-            
             # # Do "manual" fourier transform, using time-difference (phase from initial time added later)
             # DT = self.t
             # # phase_arg = ind_list
@@ -681,10 +691,13 @@ class time_domain_solver():
             self.ns_ft+=1
             if self.ns_ft-1 >self.NS_ft/10*(1+self.counter):
                 print(f"    progress: {int(self.ns_ft/self.NS_ft*100)} %. Time spent: {B.toc(n=11,disp=False):.4} s")
+                print_memory_usage()
                 sys.stdout.flush()
                 self.counter+=1 
+
         
         print(f"done. Time spent: {B.toc(n=11,disp=0):.4}s")
+        print_memory_usage()
         print("")
         self.record()
         self.rho_mat = self.get_rho_mat()
@@ -705,7 +718,7 @@ class time_domain_solver():
 
     def get_rho_mat(self):
         A0 = amin(self.n_array)
-        global x,y,yo,p1,p1o,Ind_0,phi1,Ind,X
+        global x,y,yo,p1,p1o,Ind_0,phi1,Ind,X,dp1,dp2,phi2,phivec,n_grid
         if A0>0:
             return self.phase_mat/self.n_array.reshape((PHASE_RESOLUTION,PHASE_RESOLUTION,1))
         
@@ -713,6 +726,13 @@ class time_domain_solver():
             print("Interpolating Bloch vector")
             n_depth = 5
             B.tic()
+            
+  
+            
+            assert PHASE_RESOLUTION%GRID_DIVISION ==0,"GRID_DIVISION must be divisor of phase_resolution"
+            
+            grid_width = 2*pi/GRID_DIVISION
+            n_grid = PHASE_RESOLUTION//GRID_DIVISION
             
             Ind_0 = where(self.n_array==0)
             
@@ -723,46 +743,59 @@ class time_domain_solver():
             (phi1,phi2) = self.interpolation_grid
             
             p1 = phi1[Ind]
+            dphi = 2*pi/PHASE_RESOLUTION
             p2 = phi2[Ind]
+            outmat = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3))
             
-            np = len(p1)
-            p1o = zeros((9*np))
-            p2o = zeros((9*np))
-            yo  = zeros((9*np,3))
+            phivec = phi1[0,:] 
             
-            nit = 0 
-            for n1 in [-1,0,1]:
-                for n2 in [-1,0,1]:
-                   p1o[nit*np:(nit+1)*np]=p1+n1*2*pi
-                   p2o[nit*np:(nit+1)*np]=p2+n2*2*pi
-                   yo[nit*np:(nit+1)*np,:]=y
-                   
-                   nit += 1 
-                   
-            p1o,p2o,yo =[array(x) for x in [p1o,p2o,yo]]
-            
-                        
-            Ind = where((abs(p1o-pi)<1.2*pi)*(abs(p2o-pi)<1.2*pi))
-                        
-            p1o =  p1o[Ind]
-            p2o =  p2o[Ind]
-            yo =  yo[Ind]    
-            
-            
-            g_out = zeros((PHASE_RESOLUTION,PHASE_RESOLUTION,3),dtype=float)
-            # Ind = where(self.n_array==0)'*
-            
-            # global f            
-            # for d in range(0,3):
-                
-            f = LinearNDInterpolator(array([p1o,p2o]).T,yo)
-            # X[Ind_0][:,d] = 1*f(phi1[Ind_0],phi2[Ind_0])
-            X = 1*f(phi1,phi2)
+            for nb_r in range(0,GRID_DIVISION):
+                print(f"    at column {nb_r}/{GRID_DIVISION}. Time spent: {B.toc(disp=0):.4}s")
+                print_memory_usage()
 
-            g_out = X
-            # for d in range(0,3):
-            #     g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
-            
+                for nb_c in range(0,GRID_DIVISION):
+                    
+                    """
+                    We consider the block 
+                        
+                        [nr*n_grid:(nr+1)*n_grid, 
+                        nc*n_grid:(nc+1)*n_grid]
+                        
+                    First, find indices where phi1[a1:a2,b1:b2] and phi2[a1:a2,b1:b2]
+                    are the 
+                    """
+                    
+                    nr1 = nb_r * n_grid 
+                    nr2 = (nb_r+1) * n_grid
+                    nc1 = nb_c * n_grid 
+                    nc2 = (nb_c+1) * n_grid
+                    
+                    phi1_l = phi1[0,nc1]
+                    phi1_u = phi1[0,nc2-1]
+                    phi2_l = phi2[nr1,0]
+                    phi2_u = phi2[nr2-1,0]
+                    
+                    phi1_m,phi2_m = [0.5*(x1+x2) for x1,x2 in [(phi1_l,phi1_u),(phi2_l,phi2_u)]]
+                                        
+                    # Find distance of phases in p1 and p2 to center of grid block we consider 
+                    d1 = B.mod_center(p1-phi1_m,2*pi)
+                    d2 = B.mod_center(p2-phi2_m,2*pi)
+
+                    ind  = where((abs(d1)<1.2*grid_width/2)*(abs(d2)<1.2*grid_width/2))
+
+                    p1o = phi1_m+d1[ind]
+                    p2o = phi2_m+d2[ind]
+                    yo  = y[ind]
+                                        
+                    f = NearestNDInterpolator(array([p1o,p2o]).T,yo)
+                    print_memory_usage()
+                    outmat[nr1:nr2,nc1:nc2]= 1*f(phi1[nr1:nr2,nc1:nc2],phi2[nr1:nr2,nc1:nc2])
+                    # if 
+            g_out = outmat
+            B.toc()
+                # for d in range(0,3):
+                #     g_out[:,:,d] = griddata((p1o,p2o),yo[:,d],self.interpolation_grid,method="linear")
+                
             return g_out
             print(f"done. Time spent: {B.toc(disp=0):.4}s")
         
@@ -806,7 +839,36 @@ class time_domain_solver():
         
         savez(filename,k=self.k,parameters = self.parameters,phases =self.sampling_phases,evolution_record = self.evolution_record)
         
+def print_memory_usage():
+    """
+    Not using this function currently
 
+    Returns
+    -------
+    None.
+
+    """    
+    return 
+
+    try:
+        mem_usage_str = str(os.popen("ps auxwww|grep time_domain_solver| awk {'print $4'}").read())
+        outstr = ""
+        for i in mem_usage_str:
+            if i==",":
+                outstr += "."
+            elif i=="\n":
+                break
+            else:
+                outstr+=i
+
+            
+        mem_usage = float(outstr)*16000/100
+        print(f"    memory usage: {mem_usage} MB")
+    except:
+        # print("Fail")
+        pass
+    
+    
 if __name__=="__main__":
     omega2 = 20*THz
     omega1 = 1.61803398875*omega2
@@ -828,7 +890,7 @@ if __name__=="__main__":
     # set_parameters(parameters[0])
     k= array([[0,0,0.05  ]])
     
-    integration_time = 4000
+    integration_time = 10000
     
     # try:
             
@@ -880,7 +942,7 @@ if __name__=="__main__":
     colorbar()
     
     figure(4)
-    pcolormesh(X,Y,S.rho_mat[:,:,0]);colorbar()
+    pcolormesh(X,Y,S.rho_mat[:,:,2]);colorbar()
     # plot(phi1,phi2,'.w',markersize = 0.4)
     title("Interpolated")
     xlabel("$\phi_1$")

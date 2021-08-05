@@ -840,8 +840,8 @@ if __name__=="__main__":
         # a = [(0,0),(1,2),(3,2),(4,5)]
         # A=S.get_phase_mat()
         B = S_tds.get_fourier_component(0,1)
-        phi1= mod(S_tds.sampling_phases[:,:,0].flatten(),2*pi)
-        phi2= mod(S_tds.sampling_phases[:,:,1].flatten(),2*pi)
+        # phi1= mod(S_tds.sampling_phases[:,:,0].flatten(),2*pi)
+        # phi2= mod(S_tds.sampling_phases[:,:,1].flatten(),2*pi)
         
         from matplotlib.pyplot import *
         
