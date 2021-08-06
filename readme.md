@@ -70,6 +70,14 @@ Plot conversion power vs. kz
 Queue generating scripts are found in queue_scripts/
 ##scripts 
 
+### run_from_queuelist.py $queue_list $n_runs $series_length
+script for launching a sweep over several parameters. The parameter sets are stored in $queue_list.
+Submits $n_runs jobs to queue dispatcher, each run samples $series_length k-points 
+
+###wakanda_run_weyl.py
+script for launching a weyl sweep on nbi cluster. 
+Dependencies: wq
+
 ###caltech_run_weyl.py
 script for launching a weyl sweep on caltech cluster. 
 Dependencies: wq

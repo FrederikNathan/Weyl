@@ -20,8 +20,8 @@ from data_refiner import *
 import data_interpolation as DR
 import data_plotting as PL
     
-  
-n0=161
+# update_archive()
+n0=4
 angle=0.01
 # angle = 0
 phi_res = 12

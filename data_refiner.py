@@ -119,15 +119,16 @@ def update_archive():
         
         
         nf+=1 
-        if nf%5==0:
-            print(f"At file {nf}/{len(Files)}.\n    Parameter sets recorded: {NP0} \n    Time spent: {B.toc(disp=False):.4} s")
+        if nf%5000==0:
+            print(f"At file {nf}/{len(Files)}.")#"\n    Parameter sets recorded: {NP0} \n    Time spent: {B.toc(disp=False):.4} s")
             # print(f"    ")
         try:
                 
             if file[-4:] == ".npz":
                 
+                Date = int(file[-22:-16]+file[-15:-11])
                 
-                if not file in FileList:
+                if (not file in FileList) and Date>2108040900:
                     FileList.append(file)
                     D = load(DataDir+file)
                     
@@ -140,7 +141,7 @@ def update_archive():
                     Ess = D["Ess_list"]
                     Eeq = D["Eeq_list"]
                     
-                    Date = int(file[-22:-16]+file[-15:-11])
+                    # Date = int(file[-22:-16]+file[-15:-11])
                     
                     NP1 = shape(Parameters)[0]
 
@@ -258,6 +259,8 @@ def parameterprint(n):
     
 print("Loading files")
 FileList,pl,pp,kl,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist,DateList = load_archive(update=False)    
+frequency_ratio = pl[:,1]/pl[:,0]
+omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp = [pl[:,n] for n in range(0,shape(pl)[1])]
 NPARMS = len(NDP)
 print("   done.\n")
     
@@ -355,7 +358,7 @@ def get_data(n,disp=True):
     return parameters,k_out,P1_out,P2_out,N_out,Eeq,Ess,TDS
     
 
-pprint(n=7)
+# pprint(n=7)
     
     
     

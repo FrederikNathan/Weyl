@@ -32,6 +32,7 @@ from units import *
 import master_equation_multimode as MA
 
 QueueDir = "../Queues/"
+MetaQueueDir = "../MetaQueues/"
 
 TIME_PER_RUN_MINUTES = 45
 
@@ -39,13 +40,13 @@ TIME_PER_RUN_MINUTES = 45
 HN = socket.gethostname()
 if HN=="Frederiks-MacBook-Pro-2.local":
     HN = "mac"
-elif HN=="wakanda" or HN== "yukawa":
-    HN = "yu"
+elif HN=="wakanda" or HN== "yukawa" or HN =="maki.int.nbi.dk":
+    HN = "nbi"
 else: #HN=="cmtrack2.caltech.edu":
     HN="ca"
 
     
-def add_to_queue(parameterlist,klist,Name=None):
+def add_to_queue(parameterlist,klist,Name=None,prompt=True):
     
     if Name==None:
         
@@ -53,7 +54,7 @@ def add_to_queue(parameterlist,klist,Name=None):
         QueueName = input()+"_"+HN
     
     else:
-        QueueName = Name+"_"+HN
+        QueueName = Name
         
     QueuePath=QueueDir+QueueName+".npz"
 
@@ -68,11 +69,15 @@ def add_to_queue(parameterlist,klist,Name=None):
         N0 = sum(SV==0)
         N1 = sum(SV==1)
         N2 = sum(SV==2)
-        print(f"\nQueue {QueueName} already exists, with {N0+N1+N2} runs. ({N0} waiting, {N1} active, {N2} finished). \n\nAdd {NK} runs to queue? (y/n)\n")
+        if prompt:
+            
+            print(f"\nQueue {QueueName} already exists, with {N0+N1+N2} runs. ({N0} waiting, {N1} active, {N2} finished). \n\nAdd {NK} runs to queue? (y/n)\n")
         while True:
-            
-            I = input()
-            
+            if prompt:
+                I = input()
+            else:
+                I="y"
+                
             if I=="y":
                 break
             elif I=="n":
@@ -94,12 +99,17 @@ def add_to_queue(parameterlist,klist,Name=None):
             
             savez(QueuePath,Parameterlist=PL,Klist=KL,Status=SV)
             
-            print(f"\nAdded {NK} runs to queue {QueueName}\n")
+            print(f"Added {NK} runs to queue {QueueName}")
     else:
-        print(f"\nQueue {QueueName}.npz will be generated, with {NK} runs. Proceed? (y/n)")
+        if prompt:    
+            print(f"Queue {QueueName}.npz will be generated, with {NK} runs. Proceed? (y/n)\n")
         while True:
-            I = input()
             
+            if prompt:
+                I = input()
+            else:
+                I="y"
+                
             if I=="y":
                 break
             elif I=="n":
@@ -110,7 +120,7 @@ def add_to_queue(parameterlist,klist,Name=None):
                 
         if I=="y":
             savez(QueuePath,Parameterlist=parameterlist,Klist=klist,Status=zeros(NK,dtype=int))
-            print(f"\nAdded {NK} runs to queue {QueueName}")
+            print(f"Added {NK} runs to queue {QueueName}")
 
 
 
@@ -430,7 +440,27 @@ def nbi_launch(Queue,N_runs,Serieslength):
         qsub_str += f'--export LF={logfile},PRESTR="{prestr}",Q={Queue},SL={Serieslength} '
         qsub_str += f'slurm_script.sh &'
         os.system(qsub_str)
-        time.sleep(8*(1+npr.rand()))
+        time.sleep(2*(1+npr.rand()))
+    
+def launch_from_queue_list(host,queue_list,N_runs,Serieslength):
+    queue_names = load(queue_list)["queue_names"]
+    
+    N_queues    = len(queue_names)
+    
+    # n_queue = 0
+    for n in range(0,N_runs):
+        n_queue = n%N_queues
+        
+        queue_path = QueueDir + queue_names[n_queue]
+    
+        if host == "nbi":
+            nbi_launch(queue_path,1,Serieslength)
+        
+        elif host == "caltech":
+            caltech_launch(queue_path,1,Serieslength)
+
+        else:
+            raise ValueError("Host must be either 'nbi' or 'caltech'")
     
     
     
