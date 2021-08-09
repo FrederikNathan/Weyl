@@ -21,7 +21,7 @@ import data_interpolation as DR
 import data_plotting as PL
     
 # update_archive()
-n0=4
+n0=12
 angle=0.01
 # angle = 0
 phi_res = 12

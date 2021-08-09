@@ -27,7 +27,7 @@ v9: SO(3) implementation of time-domain solver. Using rotating frame interpolato
 In case of commensurate frequencies, we average over phase.
 """
 
-NP_MAX                 = 300    # Maximum number of photons before using time domain solver
+NP_MAX                 = 200    # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
@@ -739,7 +739,8 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
                   P2list=P2list[:n+1],
                   Dissipation=Dissipation[:n+1],
                   density_list=density_list[:n+1],
-                  use_tds_list=use_tds_list[:n+1])
+                  use_tds_list=use_tds_list[:n+1],
+                  t_res = tds.T_RES)
             B.tic(n=1)
     
     dissipation_list = 1/tau * (Ess_list-Eeq_list)
@@ -754,7 +755,8 @@ def main_run(klist,parameterlist,Save=True,PreStr="",
               density_list=density_list,
               Eeq_list=Eeq_list,
               Ess_list=Ess_list,
-              use_tds_list=use_tds_list)
+              use_tds_list=use_tds_list,
+              t_res = tds.T_RES)
         
     
         

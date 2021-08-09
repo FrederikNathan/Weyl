@@ -36,8 +36,9 @@ import data_plotting as PL
     
 print("WARNING: what is plotted is not the steady-state energy transfer, but the energy transferred over a finite time-window. See code for details of averaging window. At some k-points slow landau-zener tunneling (on the timescale averaging-window time) may cause a large absorption of energy from the electrons which is still not lost to dissipation (i.e., some energy may be reabsorbed). There can also be k-points where there is a deficit of energy in the electrons due to the Landu zener tunneling")
   
-nlist = [108,139,140,141,142,143,149,152,153,154,156,158,160,161,162,163,164]
-
+# nlist = [108,139,140,141,142,143,149,152,153,154,156,158,160,161,162,163,164]
+# 
+nlist = list(arange(15))
     
 (P1,P2),(std1,std2),rho,tw,parameters = DR.power_sweep(nlist)
 

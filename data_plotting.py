@@ -43,7 +43,7 @@ def angle_plot(angle_data,energy_angle_data,tau,nfig=1):
         
     xlabel("$\phi$")
     ylabel("Power, $W/\mu m^3$")
-    legend(("$dP_1/d\phi$","$dP_2/d\phi$","$-dP_1/d\phi-dP_2/d\phi$","$dP_{\\rm dis}/d\phi$"))
+    legend(("$dP_1/d\phi$","$dP_2/d\phi$","$-d(P_1+P_2)/d\phi$","$dP_{\\rm dis}/d\phi$"))
     
     plt = gcf()
     plt.set_size_inches(7,7)
