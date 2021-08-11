@@ -174,7 +174,11 @@ def readfromqueue(Queue,Serieslength):
     
     Status[I]=2
     savez(Queue,Status=Status,Klist=Klist,Parameterlist=Parameterlist)
-    
+            
+    r = npr.rand()
+    if r<0.2:
+        make_safety_copy(Queue)
+
     return 1
 
 def make_safety_copy(Queue):
