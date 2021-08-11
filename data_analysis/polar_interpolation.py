@@ -21,8 +21,8 @@ import data_interpolation as DR
 import data_plotting as PL
     
 # update_archive()
-n0=12
-angle=0.01
+n0=4
+angle=pi/2-0.01
 # angle = 0
 phi_res = 12
 parameters,klist,p1,p2,rho,Eeq,Ess,TDS              = get_data(n0)
@@ -39,6 +39,8 @@ Diss = 1/tau * (E_ss-E_eq)
 # Diss = abs(Diss)
 vmax_energy = 1
 PL.angle_plot(angle_data,e_ad,tau)
+ylim((2e-6,6e-6))
+raise ValueError
 PL.power_plot(data_2d,P0,angle=angle,nfig=20,vmax=1.)
 # raise ValueError
 PL.energy_plot(data_2d,e_d2d,P0,tau,angle=angle,nfig=75,vmax=vmax_energy)

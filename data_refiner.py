@@ -128,7 +128,10 @@ def update_archive():
                 
                 Date = int(file[-22:-16]+file[-15:-11])
                 
-                if (not file in FileList) and Date>2108040900:
+                if Date<2108042359:
+                    continue 
+                
+                if (not file in FileList):
                     FileList.append(file)
                     D = load(DataDir+file)
                     
@@ -151,6 +154,13 @@ def update_archive():
                         TDS = D["use_tds_list"]*1
                     except KeyError:
                         TDS = 2*ones((NK),dtype=int)
+                
+                    try:
+                        T_RES = D["t_res"]
+                        print(T_RES)# T_RES ==
+                        print(f"Used file {file}")
+                    except KeyError:
+                        continue
                         
                     
                         
@@ -214,7 +224,9 @@ def update_archive():
         
     
         
-
+    print("Done. Proceed?")
+    x = input()
+    
     savez(ArchivePath,FileList=FileList,ParameterList=ParameterList,PPointList=PPointList,klist=klist,P1list=P1list,P2list=P2list,Nlist=Nlist,NDP=NDP,Eeqlist=Eeqlist,Esslist=Esslist,
           TDSlist=TDSlist,DateList=DateList)
     

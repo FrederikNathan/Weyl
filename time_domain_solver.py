@@ -18,7 +18,7 @@ In case of commensurate frequencies, we average over phase.
 T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 100
-T_RES            = 300   # time resolution that enters. 
+T_RES            = 1000   # time resolution that enters. 
 # print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e5  # Number of entries in cached quantities
 PHASE_RESOLUTION = 1000  # Phase resolution of solver 
