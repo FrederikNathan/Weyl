@@ -18,7 +18,7 @@ In case of commensurate frequencies, we average over phase.
 T_RELAX          = 11 # time-interval used for relaxing to steady state, in units of tau.
                                       # i.e. relative uncertainty of steady state = e^{-STEADY_STATE_RELATIVE_TMAX}
 NMAT_MAX         = 100
-T_RES            = 1000   # time resolution that enters. 
+T_RES            = 300   # time resolution that enters. 
 # print("WARNING - SET T_RES BACK TO 1000 BEFORE USING")
 CACHE_ELEMENTS   = 1e5  # Number of entries in cached quantities
 PHASE_RESOLUTION = 1000  # Phase resolution of solver 
@@ -787,7 +787,7 @@ class time_domain_solver():
                     p2o = phi2_m+d2[ind]
                     yo  = y[ind]
                                         
-                    f = NearestNDInterpolator(array([p1o,p2o]).T,yo)
+                    f = LinearNDInterpolator(array([p1o,p2o]).T,yo)
                     print_memory_usage()
                     outmat[nr1:nr2,nc1:nc2]= 1*f(phi1[nr1:nr2,nc1:nc2],phi2[nr1:nr2,nc1:nc2])
                     # if 
@@ -848,7 +848,7 @@ def print_memory_usage():
     None.
 
     """    
-    return 
+    # return 
 
     try:
         mem_usage_str = str(os.popen("ps auxwww|grep time_domain_solver| awk {'print $4'}").read())
@@ -890,7 +890,7 @@ if __name__=="__main__":
     # set_parameters(parameters[0])
     k= array([[0,0,0.05  ]])
     
-    integration_time = 10000
+    integration_time = 5000
     
     # try:
             

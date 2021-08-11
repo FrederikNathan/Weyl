@@ -27,7 +27,7 @@ v9: SO(3) implementation of time-domain solver. Using rotating frame interpolato
 In case of commensurate frequencies, we average over phase.
 """
 
-NP_MAX                 = 200    # Maximum number of photons before using time domain solver
+NP_MAX                 = 300    # Maximum number of photons before using time domain solver
 INITIAL_NP             = 10
 NPHI_RGF               = 200    # NPhi used to calculate rho_steady_state with rgf metho
 NPHI_TDS               = 200    # Nphi used to calculate steadystate with tds method
