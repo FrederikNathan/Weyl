@@ -628,7 +628,7 @@ def derive_quantities_from_steady_state_component(k,parameters,r0,r1,r2):
     
     Eav_eq          = wl.get_average_equlibrium_energy(k,NPHI_TDS,mu)
 
-    density = 2*r2[0]+trace(r1[1])   
+    density = 2*r2[0]+trace(r1[0])   
     
     
     dissipation = 1/tau*(Eav_steadystate-Eav_eq)       
