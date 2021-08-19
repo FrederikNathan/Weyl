@@ -848,7 +848,7 @@ def print_memory_usage():
     None.
 
     """    
-    # return 
+    return 
 
     try:
         mem_usage_str = str(os.popen("ps auxwww|grep time_domain_solver| awk {'print $4'}").read())

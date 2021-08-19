@@ -18,7 +18,7 @@ from scipy.interpolate import griddata
 import basic as B
 from units import *
 from data_refiner import *
-
+from weyl_liouvillian import * 
 N_SAMPLES_ESTIMATE_ERROR = 5 #30
 
 
@@ -120,6 +120,7 @@ def compute_energy(klist,Eeq,Ess,phi_res=6):
     
 
     return (E_equilibrium,E_steadystate),(Eeq_phi,Ess_phi),((Eeq,Ess),out_grid),Nlist
+
 
 def compute_power(klist,p1,p2,rho,phi_res=6):
     """

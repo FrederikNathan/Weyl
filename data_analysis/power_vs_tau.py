@@ -38,8 +38,9 @@ print("WARNING: what is plotted is not the steady-state energy transfer, but the
   
 # nlist = [108,139,140,141,142,143,149,152,153,154,156,158,160,161,162,163,164]
 # 
-nlist = list(arange(22))
-nlist.pop(2)
+nlist = list(arange(1,25))
+nlist = [1,24,10]+list(arange(2,10))+list(arange(11,26))
+# nlist.pop(0)
     
 (P1,P2),(std1,std2),rho,tw,parameters = DR.power_sweep(nlist)
 
@@ -73,7 +74,7 @@ for p in parameters:
         series_pointer[np]=1*Z
         
     np+=1
-
+#%%
     
 legendlist=[]
 NS = len(series_list)

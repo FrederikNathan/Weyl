@@ -113,7 +113,7 @@ def update_archive():
     nf = 0
 
     NP0 = 0
-    
+    global omega1,omega2,Parameters,D
     B.tic()
     for file in Files:
         
@@ -144,6 +144,11 @@ def update_archive():
                     Ess = D["Ess_list"]
                     Eeq = D["Eeq_list"]
                     
+                    omega1,omega2 = Parameters[:,0:2].T
+                    if amin(abs(omega2/omega1-1.5))<1e-5:
+                        if Date<2108110938:
+                            continue
+                        
                     # Date = int(file[-22:-16]+file[-15:-11])
                     
                     NP1 = shape(Parameters)[0]
@@ -155,15 +160,7 @@ def update_archive():
                     except KeyError:
                         TDS = 2*ones((NK),dtype=int)
                 
-                    try:
-                        T_RES = D["t_res"]
-                        print(T_RES)# T_RES ==
-                        print(f"Used file {file}")
-                    except KeyError:
-                        continue
-                        
-                    
-                        
+   
     #                Conv = D["convlist"]
     #                Cr = D["crlist"]
                     
@@ -224,8 +221,7 @@ def update_archive():
         
     
         
-    print("Done. Proceed?")
-    x = input()
+    # print("Done. Proceedup
     
     savez(ArchivePath,FileList=FileList,ParameterList=ParameterList,PPointList=PPointList,klist=klist,P1list=P1list,P2list=P2list,Nlist=Nlist,NDP=NDP,Eeqlist=Eeqlist,Esslist=Esslist,
           TDSlist=TDSlist,DateList=DateList)
@@ -233,6 +229,7 @@ def update_archive():
     savez(ArchivePath_sc,FileList=FileList,ParameterList=ParameterList,PPointList=PPointList,klist=klist,P1list=P1list,P2list=P2list,Nlist=Nlist,NDP=NDP,Eeqlist=Eeqlist,Esslist=Esslist,
           TDSlist=TDSlist,DateList=DateList)
     
+update_archive()
                 
     # return FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist
             

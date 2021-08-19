@@ -17,7 +17,7 @@ from matplotlib.pyplot import *
 import basic as B
 from units import *
 from data_refiner import *
-
+import weyl_liouvillian as wl
 
 def angle_plot(angle_data,energy_angle_data,tau,nfig=1):
     (P1_phi,P2_phi,Rho_phi)=angle_data
@@ -220,11 +220,26 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     # ND = sum(abs(Diff))*0.001**2*(pi/(2*Nphi))
     # print(f"Norm of difference between two energy absorptions/(): {ND:.4}")
       
-def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
+def density_plot(Data,parameters,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
+    global klist,kx,ky,kz,rhoeq,Rhoeq
     ((P1,P2,Rho),grid)=Data
-    
+    omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp    = parameters
+
     rg,zg = grid
-        
+    
+    kx = (rg*cos(angle)).flatten()
+    ky = (rg*sin(angle)).flatten()
+    kz = zg.flatten()
+    
+    gridshape = shape(rg)
+    klist     = vstack((kx,ky,kz)).T
+    
+    wl.set_parameters(parameters)
+    rhoeq = wl.get_rhoeq(klist,mu=Mu)
+    density = 2*rhoeq[2] + rhoeq[1][:,0,0]+rhoeq[1][:,1,1]
+    
+    Rhoeq = real(density.reshape(gridshape))
+    
     if angle>pi/2 or angle <0:
         raise ValueError("Angle must be in the interval [0,pi/2]")
           
@@ -234,10 +249,10 @@ def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     nphi = int((angle/(pi/2))*S)
 
     figure(4)
-    title(f"Particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$, in units of $P_0$")
+    title(f"Steady-state particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$")
     
-    pcolormesh(rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1,shading="auto")
-    pcolormesh(-rg,zg,-Rho[nphi,:,:],cmap="Greens",vmin=-2,vmax=-1,shading="auto")
+    pcolormesh(rg,zg,Rho[nphi,:,:],cmap="Greens",vmin=0,vmax=2,shading="auto")
+    pcolormesh(-rg,zg,Rho[nphi,:,:],cmap="Greens",vmin=0,vmax=2,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -248,7 +263,25 @@ def density_plot(Data,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     plt = gcf()
     plt.set_size_inches(11,8)
     
-    # colorbar()
+    colorbar()
+    
+    figure(5)
+    title(f"Equilibrium particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$")
+    
+    pcolormesh(rg,zg,Rhoeq,cmap="Greens",vmin=0,vmax=2,shading="auto")
+    pcolormesh(-rg,zg,Rhoeq,cmap="Greens",vmin=0,vmax=2,shading="auto")
+    ylim(YLIM)
+    xlim(XLIM)
+    xlabel("$k_r$")
+    ylabel("$k_z$")
+    
+    ax  =gca()
+    ax.set_aspect("equal")
+    plt = gcf()
+    plt.set_size_inches(11,8)
+    
+    colorbar()
+    
 def data_point_plot(klist_0,TDS,phi0,dphi=pi/(2*6),XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),nfig=8):
     # global kr
     cstrlist=[".k",".r"]
