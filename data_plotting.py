@@ -18,6 +18,8 @@ import basic as B
 from units import *
 from data_refiner import *
 import weyl_liouvillian as wl
+XLIM = (-0.15,0.15)
+YLIM = (-0.32,0.12)
 
 def angle_plot(angle_data,energy_angle_data,tau,nfig=1):
     (P1_phi,P2_phi,Rho_phi)=angle_data
@@ -49,7 +51,7 @@ def angle_plot(angle_data,energy_angle_data,tau,nfig=1):
     plt.set_size_inches(7,7)
     
     
-def power_plot(Data,P0,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=None):
+def power_plot(Data,P0,XLIM=XLIM,YLIM=YLIM,angle=0,nfig=3,vmax=None):
     ((P1,P2,Rho),grid)=Data
     
     P1  =  P1/P0
@@ -108,7 +110,7 @@ def power_plot(Data,P0,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=No
     # plt.set_size_inches(11,8)    
     # colorbar()
       
-def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nfig=3,vmax=None):
+def energy_plot(DataP,DataE,P0,tau,XLIM=XLIM,YLIM=YLIM,angle=0,nfig=3,vmax=None):
     ((P1,P2,Rho),grid)=DataP
     ((Eeq,Ess),grid)=DataE
     
@@ -196,15 +198,14 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     plt = gcf()
     plt.set_size_inches(11,8)    
     colorbar()
-    
     figure(nfig+2)
     title("Absorbed energy (work - disspated energy) [$P_0$] \n(i.e. energy absorbed by the electrons which is not dissipated yet)",fontsize=12)
     Diff =(-( P1+P2) -1/tau * (Ess-Eeq))/P0
     pcolormesh(rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     pcolormesh(-rg,zg,Diff[nphi,:,:],cmap="bwr",vmin=-Pmax,vmax=Pmax,shading="auto")
     
-    XLIM=(-0.25,0.25)
-    YLIM=(-0.45,0.2)
+    # XLIM=(-0.25,0.25)
+    # YLIM=(-0.45,0.2)
     
     ylim(YLIM)
     xlim(XLIM)
@@ -216,12 +217,13 @@ def energy_plot(DataP,DataE,P0,tau,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0,nf
     plt = gcf()
     plt.set_size_inches(11,8)
     colorbar()
+    
       
     # ND = sum(abs(Diff))*0.001**2*(pi/(2*Nphi))
     # print(f"Norm of difference between two energy absorptions/(): {ND:.4}")
       
-def density_plot(Data,parameters,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
-    global klist,kx,ky,kz,rhoeq,Rhoeq
+def density_plot(Data,parameters,XLIM=XLIM,YLIM=YLIM,angle=0):
+    global klist,kx,ky,kz,rhoeq,Rhoeq,Rho
     ((P1,P2,Rho),grid)=Data
     omega1,omega2,tau,vF,V0x,V0y,V0z,EF1,EF2,Mu,Temp    = parameters
 
@@ -247,29 +249,28 @@ def density_plot(Data,parameters,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     
     S = shape(P2)[0]
     nphi = int((angle/(pi/2))*S)
-
     figure(4)
-    title(f"Steady-state particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$")
-    
-    pcolormesh(rg,zg,Rho[nphi,:,:],cmap="Greens",vmin=0,vmax=2,shading="auto")
-    pcolormesh(-rg,zg,Rho[nphi,:,:],cmap="Greens",vmin=0,vmax=2,shading="auto")
-    ylim(YLIM)
-    xlim(XLIM)
-    xlabel("$k_r$")
-    ylabel("$k_z$")
-    
-    ax  =gca()
-    ax.set_aspect("equal")
-    plt = gcf()
-    plt.set_size_inches(11,8)
-    
-    colorbar()
-    
-    figure(5)
     title(f"Equilibrium particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$")
     
-    pcolormesh(rg,zg,Rhoeq,cmap="Greens",vmin=0,vmax=2,shading="auto")
-    pcolormesh(-rg,zg,Rhoeq,cmap="Greens",vmin=0,vmax=2,shading="auto")
+    pcolormesh(rg,zg,Rhoeq,cmap="Purples",vmin=1,vmax=2,shading="auto")
+    pcolormesh(-rg,zg,Rhoeq,cmap="Purples",vmin=1,vmax=2,shading="auto")
+    ylim(YLIM)
+    xlim(XLIM)
+    xlabel("$k_r$")
+    ylabel("$k_z$")
+    
+    ax  =gca()
+    ax.set_aspect("equal")
+    plt = gcf()
+    plt.set_size_inches(11,8)
+    
+    colorbar()
+
+    figure(5)
+    title(f"Steady-state particle density vs. $k_r$ and $k_z$, at xy-angle $\phi = {around(angle,1)}$")
+    
+    pcolormesh(rg,zg,Rho[nphi,:,:],cmap="Purples",vmin=1,vmax=2,shading="auto")
+    pcolormesh(-rg,zg,Rho[nphi,:,:],cmap="Purples",vmin=1,vmax=2,shading="auto")
     ylim(YLIM)
     xlim(XLIM)
     xlabel("$k_r$")
@@ -282,7 +283,8 @@ def density_plot(Data,parameters,XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),angle=0):
     
     colorbar()
     
-def data_point_plot(klist_0,TDS,phi0,dphi=pi/(2*6),XLIM=(-0.25,0.25),YLIM=(-0.45,0.2),nfig=8):
+    
+def data_point_plot(klist_0,TDS,phi0,dphi=pi/(2*6),XLIM=XLIM,YLIM=YLIM,nfig=8):
     # global kr
     cstrlist=[".k",".r"]
     legendlist=["Time-domain solver","Frequency domain solver"]

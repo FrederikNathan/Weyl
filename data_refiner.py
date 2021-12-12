@@ -108,7 +108,9 @@ def load_archive(update=True):
 
 
 def update_archive():
-        
+    print("%"*80)
+    print("WARNING!\n\nRuns taken before Aug 19th 2021 12:30 CET have a bug that means the density\nis not computed correctly.\n\nThe power is still correct, but do not trust density for these data\n")
+    print("%"*80)
     FileList,ParameterList,PPointList,klist,P1list,P2list,Nlist,NDP,Eeqlist,Esslist,TDSlist,DateList = load_archive(update=False)        
     nf = 0
 
@@ -140,7 +142,16 @@ def update_archive():
                     Parameters=D["parameterlist"]
                     P1 = D["P1_list"]
                     P2 = D["P2_list"]
+                    
+                        
                     N = D["density_list"]
+                    
+                    if Date<2108191230:
+                        N = nan*N
+                        notnan=False
+                    else:
+                        # print(f"{file}: Not nan")
+                        notnan=True
                     Ess = D["Ess_list"]
                     Eeq = D["Eeq_list"]
                     
@@ -185,6 +196,9 @@ def update_archive():
                             
                             ParameterList = concatenate((ParameterList,1*Parameters[N1].reshape((1,11))))
                         nit+=1
+                        
+                    # if notnan:1
+                        # print(set(ParameterPointer))
                           
                     
                     PPointList = concatenate((PPointList,ParameterPointer))
@@ -248,12 +262,12 @@ def parameterprint(n):
     # first_date,last_date = get_dates(n)
 
     print("-"*80)
-    print(f"    omega_1            :  {omega1/THz:<8.4} THz")
-    print(f"    omega_2            :  {omega2/THz:<8.4} THz")
+    print(f"    omega_1            :  {omega1/THz_physical:<8.4} THz")
+    print(f"    omega_2            :  {omega2/THz_physical:<8.4} THz")
     print(f"    ratio              :  {omega2/omega1:<8.9}\n")
-    print(f"    tau                :  {tau/picosecond:<8.4} ps\n")
-    print(f"    vF                 :  {vF/(meter/second):<8.4} m/s")
-    print(f"    v0                 :  {V0z/(meter/second):<8.4} m/s\n")
+    print(f"    tau                :  {tau/picosecond_physical:<8.4} ps\n")
+    print(f"    vF                 :  {vF/(meter/second_physical):<8.4} m/s")
+    print(f"    v0                 :  {V0z/(meter/second_physical):<8.4} m/s\n")
     print(f"    E1                 :  {EF1/(Volt/meter):<8.4} V/m")
     print(f"    E2                 :  {EF2/(Volt/meter):<8.4} V/m\n")
     print(f"    mu                 :  {Mu/meV:<8.4} meV")

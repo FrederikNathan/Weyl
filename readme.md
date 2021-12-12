@@ -83,7 +83,7 @@ script for launching a weyl sweep on caltech cluster.
 Dependencies: wq
 
 ###queue_scripts/big_sweep.py
-Script for generating "big" sweep of the whole fermi surface, with dense points around weyl point. 
+Script for generating "big" sweep of the whole fermi sea, with dense points around weyl point. 
 
 ### check_queue.py
 Check status of queue

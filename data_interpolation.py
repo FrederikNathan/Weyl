@@ -114,8 +114,8 @@ def compute_energy(klist,Eeq,Ess,phi_res=6):
     Nphi = len(Eeq_phi)
     dphi = 2*pi/Nphi
     
-    E_equilibrium = sum(Eeq_phi)*dphi
-    E_steadystate = sum(Ess_phi)*dphi
+    E_equilibrium = sum(Eeq_phi)*dphi/(8*pi**3)
+    E_steadystate = sum(Ess_phi)*dphi/(8*pi**3)
     
     
 
@@ -153,7 +153,7 @@ def compute_power(klist,p1,p2,rho,phi_res=6):
     
     """
         
-    
+    global ind,kpoints_reduced,rho_reduced,rhho,rho_in_reduced,Ind_reduced,phimax,phimin,x,y
     kx,ky,kz = [klist[:,n] for n in (0,1,2)]
     r        = sqrt(kx**2+ky**2)
     phi      = arcsin(ky/(1e-14+r))+1e-9
@@ -162,11 +162,16 @@ def compute_power(klist,p1,p2,rho,phi_res=6):
 
     dphi = pi/(2*phi_res)
     
+    rhho = 1*rho
     rmax = amax(r)
     kzmax=amax(kz)
     kzmin = amin(kz)
     
     kz_int = kzmax-kzmin
+    
+    ind = where(isnan(rho)^1)[0]
+    [kpoints_reduced,r_reduced,rho_reduced] =[x[ind] for x in [kpoints,r,rho]]
+
 
     #kz_box_cen = int(kz_n_cen)
     dk = 0.001
@@ -185,19 +190,31 @@ def compute_power(klist,p1,p2,rho,phi_res=6):
         phimax = (nphi+1)*dphi
         
         Ind = where((kpoints[:,0]<phimax)*(kpoints[:,0]>=phimin))[0]
+        Ind_reduced = where((kpoints_reduced[:,0]<phimax)*(kpoints_reduced[:,0]>=phimin))[0]
         if len(Ind)>0:
             
-            p1_in,p2_in,k2d_in,r_in,rho_in    = [x[Ind] for x in (p1,p2,kpoints[:,1:],r,rho)]
+            p1_in,p2_in,k2d_in,r_in    = [x[Ind] for x in (p1,p2,kpoints[:,1:],r)]
+            k2d_in_reduced,r_in_reduced,rho_in_reduced    = [x[Ind_reduced] for x in (kpoints_reduced[:,1:],r_reduced,rho_reduced)]
             
-            x= griddata(k2d_in,array([p1_in,p2_in,rho_in,p1_in*r_in,p2_in*r_in,rho_in*r_in]).T,(out_grid[0],out_grid[1]),fill_value=0,method="nearest")
-            Out[:,nphi,:,:]=x.swapaxes(0,2).swapaxes(1,2)
+            x= griddata(k2d_in,array([p1_in,p2_in,p1_in*r_in,p2_in*r_in]).T,(out_grid[0],out_grid[1]),fill_value=0,method="nearest")
+            
+            if len(Ind_reduced)>0:
+                
+                y= griddata(k2d_in_reduced,array([rho_in_reduced,rho_in_reduced*r_in_reduced]).T,(out_grid[0],out_grid[1]),fill_value=0,method="nearest")
+            else:
+                y = nan*ones((N_r,N_z,2))
+                
+
+            Out[array([0,1,3,4]),nphi,:,:]=x.swapaxes(0,2).swapaxes(1,2)
+            Out[array([2,5]),nphi,:,:] =y.swapaxes(0,2).swapaxes(1,2)
+
             Nlist[nphi] = 1*len(Ind)
     
-    P1 = Out[0,:,:,:]
-    P2 = Out[1,:,:,:]
-    Rho = Out[2,:,:,:]
-    P1w = Out[3,:,:,:]
-    P2w = Out[4,:,:,:]
+    P1   = Out[0,:,:,:]
+    P2   = Out[1,:,:,:]
+    Rho  = Out[2,:,:,:]
+    P1w  = Out[3,:,:,:]
+    P2w  = Out[4,:,:,:]
     Rhow = Out[5,:,:,:]
     
     P1_phi = extend_angle(sum(P1w,axis=(1,2))*dk**2)
@@ -208,9 +225,9 @@ def compute_power(klist,p1,p2,rho,phi_res=6):
     Nphi = len(P1_phi)
     dphi = 2*pi/Nphi
     
-    Power_1 = sum(P1_phi)*dphi
-    Power_2 = sum(P2_phi)*dphi
-    Density = sum(Rho_phi)*dphi
+    Power_1 = sum(P1_phi)*dphi/(8*pi**3)
+    Power_2 = sum(P2_phi)*dphi/(8*pi**3)
+    Density = sum(Rho_phi)*dphi/(8*pi**3)
     
     
 
