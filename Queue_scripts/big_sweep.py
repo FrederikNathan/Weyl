@@ -14,10 +14,10 @@ from scipy.linalg import *
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from numpy import * 
-
 import numpy.random as npr
 import scipy.optimize as optimize
-from Units import * 
+
+from units import * 
 import weyl_queue as Q
 import queue_generators as QG
 
@@ -33,10 +33,8 @@ dk_i = 0.0015
 dk_o = 0.003
 phi_res = 48
 
-
-
 omega2 = 20*THz
-omega1 = omega2/1.50001
+omega1 = omega2/1.500015
 tau    = 200*picosecond
 vF     = 1e6*meter/second
 

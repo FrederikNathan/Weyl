@@ -4,6 +4,8 @@
 Created on Tue Sep  8 14:31:50 2020
 
 @author: frederik
+
+module for generating useful k-point arrays for weyl simulation
 """
 import os 
 import sys
@@ -14,20 +16,19 @@ from scipy.linalg import *
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from numpy import * 
-
 import numpy.random as npr
 import scipy.optimize as optimize
-from Units import * 
+
+from units import * 
 import weyl_queue as Q
 
 
-
-def get_outer_kgrid(phi_res,dk):
+def get_outer_kgrid(philist,dk):
 
     # Use cylindrical coordinates
     kzlist = arange(-0.38,0.15,dk)*(Å**-1)
     krlist = arange(dk,0.15,dk)*(Å**-1)
-    philist = linspace(0,pi/2,phi_res)
+    # philist = linspace(0,pi/2,phi_res)
     
     NK = len(kzlist)*len(krlist)*len(philist)+len(kzlist)
     
@@ -54,10 +55,10 @@ def get_outer_kgrid(phi_res,dk):
     klist = klist[:NK,:]
     return klist
 
-def get_inner_kgrid(phi_res,dk):
+def get_inner_kgrid(philist,dk):
     kzlist = arange(-0.1,0.1,dk)*(Å**-1)
     krlist = arange(dk,0.1,dk)*(Å**-1)
-    philist = linspace(0,pi/2,phi_res)
+    # philist = linspace(0,pi/2,phi_res)
     
     NK = len(kzlist)*len(krlist)*len(philist)+len(kzlist)
     
@@ -79,11 +80,30 @@ def get_inner_kgrid(phi_res,dk):
     return klist
 
 
+# def get_kgrid(phires_inner,phires_outer,dk_inner,dk_outer):
+#     # philist= 
+    
+#     ki = get_inner_kgrid(phires_inner,dk_inner)
+#     ko = get_outer_kgrid(phires_inner,dk_outer)
+    
+#     return concatenate((ki,ko))
+
 def get_kgrid(phires_inner,phires_outer,dk_inner,dk_outer):
-    ki = get_inner_kgrid(phires_inner,dk_inner)
-    ko = get_outer_kgrid(phires_inner,dk_outer)
+    philist= linspace(0,pi/2,phi_res_innner)
+    
+    ki = get_inner_kgrid(philist,dk_inner)
+    ko = get_outer_kgrid(philist,dk_outer)
     
     return concatenate((ki,ko))
+
+def get_kgrid_2d(phi,dk_inner,dk_outer):
+    philist= array([phi])
+    
+    ki = get_inner_kgrid(philist,dk_inner)
+    ko = get_outer_kgrid(philist,dk_outer)
+    
+    return concatenate((ki,ko))
+
 
 #Y = get_kgrid(16,16,0.002,0.008)
 
