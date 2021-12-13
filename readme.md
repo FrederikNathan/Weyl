@@ -3,14 +3,14 @@
 
 # Core:
 
-##scripts 
-###caltech_run_weyl.py
+## scripts 
+### caltech_run_weyl.py
 script for launching a weyl sweep on caltech cluster. 
 Dependencies: wq
 
 
-##modules 
-###weyl_queue.py (wq)
+## modules 
+### weyl_queue.py (wq)
 module for adding to queue, reading from queue, and launching from queue. 
 Dependencies: mem
 
