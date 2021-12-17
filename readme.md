@@ -29,10 +29,11 @@ Module for vectorizing matrices
 Module for inverting Weyl liouvillian in frequency space, using recursive greens function method. 
 
 ### time_domain_solver.py (tds)
-Module for solving weyl problem in time-domain
+Module for solving weyl problem in time-domain.
 Dependencies: wl,so3
 
-###so3
+###
+so3
 Moduele for representing weyl problem in SO(3) representation, and useful functions associated. Used for solving weyl in time-domain.
 
 
