@@ -22,7 +22,7 @@ Dependencies: wl,rgf,tds
 module for constructing the Weyl model and representing it in operator space.
 Dependencies: vec
 
-### vectorization.py (vec)
+### vectorization.py (vec)Cancel changes
 Module for vectorizing matrices
 
 ### recursive_greens_function.py (rgf)
@@ -32,8 +32,7 @@ Module for inverting Weyl liouvillian in frequency space, using recursive greens
 Module for solving weyl problem in time-domain.
 Dependencies: wl,so3
 
-###
-so3
+### so3
 Moduele for representing weyl problem in SO(3) representation, and useful functions associated. Used for solving weyl in time-domain.
 
 
